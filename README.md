@@ -1,0 +1,249 @@
+# AI Intuitive Review
+
+Human validation of LLM and agent outputs. A set of small, runnable **agentic UX
+patterns** that make an AI's work *explainable* and *trustable* — so a user can
+glance at a recommendation, understand where it came from, verify it, and decide
+whether to let the agent act.
+
+The thesis (from [`IDEA.md`](./IDEA.md)): enterprise adoption is gated less by raw
+model quality than by **trust**. Trust is built progressively, through UX, by
+answering four questions the user always has:
+
+1. **Where did this come from?** → citations & attribution
+2. **How did you get here?** → walkthroughs & reasoning
+3. **Can I see more without drowning?** → progressive disclosure
+4. **Are you about to do something I didn't approve?** → human-in-the-loop
+
+Each idea in `IDEA.md` becomes one **discrete, self-contained example**: a defined
+input, a UX pattern, and a concrete tech approach. You can build them one at a
+time and demo each on its own.
+
+---
+
+## The six examples
+
+| # | Example | IDEA topic | The trust question it answers |
+|---|---------|-----------|-------------------------------|
+| 01 | **Grounded Citations** | Citations | *"Where did this specific claim come from?"* |
+| 02 | **Progressive Disclosure** | Expandable cards / links | *"Show me more — but only when I ask."* |
+| 03 | **Agent Walkthrough** | Iterative walkthroughs | *"Replay how you got here, step by step."* |
+| 04 | **Reasoning as Proof** | Reasoning tokens as proof | *"Show your working, not just the answer."* |
+| 05 | **Document Attribution** | Clickable nav + highlighting | *"Jump me to the exact place in the source."* |
+| 06 | **Approval / Human-in-the-loop** | (from README: *act with approval*) | *"Ask me before you actually do it."* |
+
+Examples 01–05 build **understanding**; 06 gates **action**. Together they cover
+the full "review → trust → authorize" arc.
+
+---
+
+## Example breakdowns
+
+### 01 · Grounded Citations
+**What the user sees.** An answer where individual sentences carry inline
+footnote markers `[1]`. Hovering a marker pops a card with the exact quoted source
+span; clicking scrolls the source panel to it. Uncited sentences are visually
+flagged so the user knows what is *not* grounded.
+
+**Sample input.** A small corpus (3–5 markdown/PDF docs — e.g. a product spec, a
+policy doc, a support-ticket thread) + a question like *"What's our refund window
+for enterprise plans?"*
+
+**Approach.** Don't ask the model to invent `[1]` markers in prose — that's where
+hallucinated citations come from. Instead use a **structured, grounded** citation
+layer:
+- **Anthropic Citations API** (native): pass documents as `content` blocks with
+  `citations: {enabled: true}`; the model returns text blocks each carrying
+  `cited_text` + char/page ranges you render deterministically. This is the
+  highest-trust path — the range comes from the API, not a prompt.
+- **Provider-agnostic fallback:** have the model emit a JSON array of
+  `{claim, source_id, quote}` and resolve `quote` back to a character offset in
+  the source yourself (fuzzy-match to survive chunking whitespace drift).
+
+**Stack.** Anthropic SDK for the grounded call; a `<Citation>` React component
+(marker + hover-card) driving a synced source pane.
+
+---
+
+### 02 · Progressive Disclosure
+**What the user sees.** A concise headline recommendation. Beneath it, collapsed
+**evidence cards** ("3 supporting findings", "1 caveat") that expand on click.
+Deep detail (raw tool output, full row data) lives one more level down. The user
+controls depth; the default view stays scannable.
+
+**Sample input.** An agent analysis result with tiers of detail, e.g. a vendor
+risk summary: verdict → 3 findings → per-finding raw evidence + links.
+
+**Approach.** Make the agent **emit a tree, not a wall of text**. Define a small
+schema — `summary`, `findings[]`, each finding with `detail` and `evidence[]` —
+and render each level as an expandable region. The model's job is to *tier* the
+information; the UI's job is to reveal it lazily.
+
+**Stack.** Radix UI `Collapsible`/`Accordion` (or shadcn/ui) for accessible
+expandable cards; structured output via AI SDK `streamObject` / Anthropic tool
+schema so the tree streams in and renders top-down.
+
+---
+
+### 03 · Agent Walkthrough (trajectory replay)
+**What the user sees.** A timeline of the agent's run: each step is a card —
+*thought → tool call → observation*. The user can step forward/back, expand any
+tool call to see inputs/outputs, and see intermediate state. It reframes an
+opaque "the agent did stuff" into an auditable, replayable trajectory.
+
+**Sample input.** A recorded agent run (a LangGraph thread, or a saved trace) —
+e.g. a research task that made 4 tool calls. Replay from the saved events; no
+live model needed for the demo.
+
+**Approach.** Stream the agent's **events**, not just its final message. This is
+exactly what the [**AG-UI protocol**](https://github.com/ag-ui-protocol/ag-ui)
+standardizes (tool-call-start, tool-result, state-delta, …). Persist events, then
+render them as a scrubber-driven timeline.
+
+**Stack.** LangGraph backend + [**Agent Chat UI**](https://github.com/langchain-ai/agent-chat-ui)
+(Next.js app that already streams tool calls & reasoning), *or* CopilotKit/AG-UI
+for the event stream. Store the trace as JSON for deterministic replay.
+
+---
+
+### 04 · Reasoning as Proof
+**What the user sees.** The model's **extended-thinking** stream shown in a
+distinct, de-emphasized "reasoning" channel above the answer — collapsible,
+clearly labeled as the model's private working, with the final answer visually
+separated. Turns invisible chain-of-thought into inspectable proof-of-work.
+
+**Sample input.** Any question that benefits from reasoning (a multi-step
+calculation, a policy judgement call). Enable thinking on the model call.
+
+**Approach.** Use **native reasoning tokens**, not a "think step by step" hack:
+Anthropic **extended thinking** returns `thinking` content blocks separate from
+the answer. Stream them into a dedicated reasoning region. Key UX rules: label it
+as *reasoning* (not fact), keep it collapsed by default, and never let it visually
+outrank the answer.
+
+**Stack.** Anthropic SDK with `thinking` enabled (stream `thinking_delta` vs
+`text_delta` into different panes). Both AI SDK and Agent Chat UI already have
+first-class "reasoning" rendering slots.
+
+---
+
+### 05 · Document Attribution & Highlighting
+**What the user sees.** A split view: agent findings on the left, the source
+document on the right. Clicking a finding scrolls the doc and **highlights the
+exact span** (with a colored overlay); a mini-map/scrollbar shows where all
+findings land. This is example 01 scaled up to long documents.
+
+**Sample input.** One long PDF (a contract, a 10-K, a research paper) + an agent
+task like *"find every clause that limits liability."*
+
+**Approach.** Attribution needs **coordinates**, so preserve spatial metadata
+through the pipeline: chunk with page + bounding-box info, keep it in the vector
+store, and have the model return chunk/sentence IDs you resolve back to
+coordinates for the highlight overlay. Fuzzy-match model quotes to rendered text
+to survive PDF.js whitespace drift.
+
+**Stack.** PDF.js (or a React PDF SDK like **Papyrus**) for rendering +
+text-layer highlighting; `react-pdf-highlighter` for the overlay UX; retrieval
+that carries bounding boxes through to the client.
+
+---
+
+### 06 · Approval / Human-in-the-loop
+**What the user sees.** When the agent wants to *act* (send an email, write to a
+DB, file a ticket), it pauses and renders an **approval card**: the proposed
+action, its arguments, a plain-language "what this will do", and Approve / Edit /
+Reject. Nothing fires without a click. This is the bridge from *review* to
+*authorize*.
+
+**Sample input.** An agent with one "dangerous" tool (mock `send_email` /
+`create_ticket`) and a task that triggers it.
+
+**Approach.** Model the tool as **interrupt-and-resume**, not fire-and-forget:
+- **LangGraph:** `interrupt()` before the tool node → surface to UI → resume with
+  the human's decision.
+- **AI SDK 6:** tool-execution **approval** (`needsApproval`) with human-in-the-loop.
+- **AG-UI/CopilotKit:** tools that request human confirmation before firing.
+
+The UX rule: render the *arguments* the model chose, let the human edit them, and
+make reject/edit as easy as approve.
+
+**Stack.** LangGraph `interrupt` + assistant-ui / Agent Chat UI (both ship
+human-in-the-loop components), or CopilotKit generative-UI approval cards.
+
+---
+
+## Framework research (current as of mid-2026)
+
+The chat/agentic-UX layer has consolidated around a few open-source stacks. For
+this repo (React/Next front end, model-agnostic back end) the shortlist:
+
+| Tool | What it is | Best for here |
+|------|-----------|---------------|
+| [**Vercel AI SDK 6**](https://vercel.com/blog/ai-sdk-6) | TS toolkit: streaming, **generative UI** (stream React components), `Agent` abstraction, tool **approval**, **AI Elements** prebuilt components | Examples 02, 04, 06 — fastest path to streaming + structured UI |
+| [**assistant-ui**](https://www.assistant-ui.com/docs/runtimes/langchain) | Embeddable React chat: streaming, generative UI, human-in-the-loop; tight **LangGraph** runtime | The chat shell for all examples |
+| [**Agent Chat UI**](https://github.com/langchain-ai/agent-chat-ui) | LangChain's Next.js app that streams any LangGraph agent incl. tool calls & reasoning | Examples 03, 04 — clone-and-go trajectory/reasoning UI |
+| [**AG-UI / CopilotKit**](https://github.com/ag-ui-protocol/ag-ui) | Open **agent↔frontend event protocol** (adopted by Google, AWS, MS, LangChain, Mastra) + React stack | Example 03, 06 — standardized event stream + HITL |
+| **Anthropic SDK** | Native **Citations API** and **extended thinking** | Examples 01, 04 — the *grounded* (non-hallucinated) primitives |
+| **PDF.js / Papyrus / react-pdf-highlighter** | Document rendering + text-layer highlighting | Example 05 |
+
+**Recommended default stack:** Next.js + **Vercel AI SDK** (or **assistant-ui**)
+for the front end, a **LangGraph** agent behind **AG-UI** for anything with tools
+or approval, and the **Anthropic SDK** directly wherever grounded citations or
+reasoning tokens are the point. This keeps every example a thin, swappable slice
+rather than one monolithic app.
+
+---
+
+## Suggested repo structure
+
+Monorepo: a shared UI/agent core, then one folder per example that each stands
+alone and boots independently. Mirrors the sibling
+[`rlm-deep-agents`](../rlm-deep-agents) layout (common core + one module per
+pattern + a walkthrough each).
+
+```
+ai-intuitive-review/
+├── README.md                       # this file
+├── IDEA.md                         # the seed notes
+├── package.json                    # workspaces / turborepo
+├── common/                         # shared, reused by every example
+│   ├── ui/                         # <Citation>, <EvidenceCard>, <StepTimeline>,
+│   │                               #   <ReasoningPane>, <ApprovalCard>, <SourcePane>
+│   ├── agent/                      # build_agent() + AG-UI event plumbing
+│   ├── schemas/                    # zod: Finding, Citation, Trajectory, Action
+│   └── theme/                      # tokens so all demos look like one system
+├── sample-data/                    # shared, versioned inputs (the "known" set)
+│   ├── docs/                       # the small corpus: spec.md, policy.pdf, 10k.pdf
+│   ├── traces/                     # recorded agent runs (JSON) for replay demos
+│   └── questions.json              # canonical prompts per example
+├── examples/
+│   ├── 01-grounded-citations/
+│   ├── 02-progressive-disclosure/
+│   ├── 03-agent-walkthrough/
+│   ├── 04-reasoning-as-proof/
+│   ├── 05-document-attribution/
+│   └── 06-approval-hitl/           # each: app/ + agent/ + README.md walkthrough
+└── walkthroughs/                   # one markdown write-up per example (the "why")
+```
+
+**Common items worth centralizing early:**
+- **Component kit** — the review primitives (`<Citation>`, `<EvidenceCard>`,
+  `<StepTimeline>`, `<ReasoningPane>`, `<ApprovalCard>`) are reused across
+  examples; build them once against a shared theme so the demos read as one
+  product.
+- **Schemas** — `Finding`, `Citation`, `Trajectory`, `Action` as zod types shared
+  by agent output and UI props; this is what makes structured output reliable.
+- **Sample data** — one small, versioned, *known* corpus + recorded traces, so
+  every demo is deterministic and reviewable without live keys (same trick as
+  `rlm-deep-agents`: construct/replay even without an API key).
+- **Agent factory + AG-UI plumbing** — one `build_agent()` and one event stream so
+  swapping model providers or adding a tool doesn't touch the UI.
+
+---
+
+## Build order
+
+Start with **01 (Grounded Citations)** — it's the smallest end-to-end trust loop
+and forces the shared `<Citation>`/`<SourcePane>` primitives. Then **02** (reuse
+the schema/expand pattern) and **04** (reasoning, cheap once streaming works).
+**03** and **05** are heavier (trajectory + PDF coordinates). Finish with **06**,
+which layers approval on top of any agent you've already built.
