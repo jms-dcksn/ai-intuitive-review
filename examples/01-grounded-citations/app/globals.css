@@ -171,6 +171,23 @@ button:disabled {
   font-style: italic;
 }
 
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  border-radius: 1px;
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 .ungrounded {
   border-bottom: 1px dashed var(--warn);
   cursor: help;

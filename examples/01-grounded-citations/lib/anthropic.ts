@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AnswerBlock, AskResponse, Citation, SourceDoc } from "./types";
+import type { SourceDoc } from "./types";
+import type { SegmentWriter } from "./segment-writer";
 
 const MODEL = process.env.CITATIONS_MODEL || "claude-sonnet-5";
 
@@ -11,20 +12,24 @@ const SYSTEM = [
 ].join(" ");
 
 /**
- * Ask the model a question over `docs` with the Citations API enabled, then
- * narrow the response to the flat {@link AskResponse} the UI consumes.
+ * Stream a grounded answer over `docs` into `out`. Uses the Anthropic **Citations
+ * API** with **streaming**: text arrives as `text_delta` events and grounded
+ * spans arrive as `citations_delta` events, each carrying an API-computed
+ * character range against the exact document text we sent.
  *
- * The key trust property: `start_char_index` / `end_char_index` on each citation
- * are produced by the API against the exact document text we sent — so the UI can
- * highlight the source deterministically instead of trusting model-written spans.
+ * We deliberately keep the grounded call on the Anthropic SDK — its streaming
+ * `citations_delta` shape is stable and the char offsets are the whole point —
+ * and hand each event to the {@link SegmentWriter}, which re-emits them as Vercel
+ * AI SDK message parts. So the transport/UI is AI SDK; the grounding is native.
  */
-export async function askWithCitations(
+export async function streamGroundedAnswer(
+  out: SegmentWriter,
   question: string,
   docs: SourceDoc[],
-): Promise<AskResponse> {
+): Promise<void> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const message = await client.messages.create({
+  const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 1024,
     system: SYSTEM,
@@ -48,63 +53,26 @@ export async function askWithCitations(
     ],
   });
 
-  return narrow(message.content as unknown as RawBlock[], docs);
-}
+  for await (const event of stream) {
+    if (event.type !== "content_block_delta") continue;
+    const delta = event.delta;
 
-// --- narrowing the provider shape -----------------------------------------
-
-interface RawCitation {
-  type: string;
-  cited_text?: string;
-  document_index?: number;
-  document_title?: string | null;
-  start_char_index?: number;
-  end_char_index?: number;
-}
-
-interface RawBlock {
-  type: string;
-  text?: string;
-  citations?: RawCitation[] | null;
-}
-
-function narrow(content: RawBlock[], docs: SourceDoc[]): AskResponse {
-  const blocks: AnswerBlock[] = [];
-  const registry: Citation[] = [];
-  // De-dupe identical spans so the same source shares one footnote number.
-  const seen = new Map<string, Citation>();
-
-  for (const block of content) {
-    if (block.type !== "text" || typeof block.text !== "string") continue;
-
-    const citations: Citation[] = [];
-    for (const raw of block.citations ?? []) {
+    if (delta.type === "text_delta") {
+      out.text(delta.text);
+    } else if (delta.type === "citations_delta") {
+      const c = delta.citation;
       // We only send text documents, so we expect char_location citations.
-      if (raw.type !== "char_location") continue;
-
-      const doc = docs[raw.document_index ?? -1];
-      const start = raw.start_char_index ?? 0;
-      const end = raw.end_char_index ?? 0;
-      const key = `${doc?.id ?? "?"}:${start}:${end}`;
-
-      let citation = seen.get(key);
-      if (!citation) {
-        citation = {
-          n: registry.length + 1,
-          docId: doc?.id ?? "unknown",
-          docTitle: doc?.title ?? raw.document_title ?? "Unknown source",
-          citedText: raw.cited_text ?? "",
-          startChar: start,
-          endChar: end,
-        };
-        seen.set(key, citation);
-        registry.push(citation);
-      }
-      citations.push(citation);
+      if (c.type !== "char_location") continue;
+      const doc = docs[c.document_index];
+      out.citation({
+        docId: doc?.id ?? "unknown",
+        docTitle: doc?.title ?? c.document_title ?? "Unknown source",
+        citedText: c.cited_text ?? "",
+        startChar: c.start_char_index ?? 0,
+        endChar: c.end_char_index ?? 0,
+      });
     }
-
-    blocks.push({ text: block.text, citations });
   }
 
-  return { blocks, citations: registry };
+  out.end();
 }

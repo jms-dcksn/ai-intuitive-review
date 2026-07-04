@@ -1,32 +1,38 @@
-import { NextResponse } from "next/server";
-import { askWithCitations } from "@/lib/anthropic";
-import { mockAnswer } from "@/lib/mock";
+import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { streamGroundedAnswer } from "@/lib/anthropic";
+import { streamMockAnswer } from "@/lib/mock";
+import { SegmentWriter } from "@/lib/segment-writer";
 import { SAMPLE_DOCS, SAMPLE_QUESTION } from "@/lib/sample-data";
-import type { AskResponse } from "@/lib/types";
+import type { ReviewUIMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
+// Streaming answers can run longer than the default serverless budget.
+export const maxDuration = 60;
 
-export async function POST(req: Request): Promise<NextResponse> {
+export async function POST(req: Request): Promise<Response> {
   const body = await req.json().catch(() => ({}));
   const question: string =
     typeof body.question === "string" && body.question.trim()
       ? body.question
       : SAMPLE_QUESTION;
 
-  // No key configured → serve the recorded answer so the UI is still reviewable.
-  if (!process.env.ANTHROPIC_API_KEY) {
-    const mock: AskResponse & { mocked: true } = {
-      ...mockAnswer(SAMPLE_DOCS),
-      mocked: true,
-    };
-    return NextResponse.json(mock);
-  }
+  const mocked = !process.env.ANTHROPIC_API_KEY;
 
-  try {
-    const answer = await askWithCitations(question, SAMPLE_DOCS);
-    return NextResponse.json(answer);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  const stream = createUIMessageStream<ReviewUIMessage>({
+    execute: async ({ writer }) => {
+      // Announce mock vs. live up front as transient metadata (not persisted).
+      writer.write({ type: "data-mode", data: { mocked }, transient: true });
+
+      const out = new SegmentWriter(writer);
+      if (mocked) {
+        await streamMockAnswer(out, SAMPLE_DOCS);
+      } else {
+        await streamGroundedAnswer(out, question, SAMPLE_DOCS);
+      }
+    },
+    onError: (error) =>
+      error instanceof Error ? error.message : "Streaming failed",
+  });
+
+  return createUIMessageStreamResponse({ stream });
 }

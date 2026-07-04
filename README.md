@@ -178,18 +178,21 @@ this repo (React/Next front end, model-agnostic back end) the shortlist:
 
 | Tool | What it is | Best for here |
 |------|-----------|---------------|
-| [**Vercel AI SDK 6**](https://vercel.com/blog/ai-sdk-6) | TS toolkit: streaming, **generative UI** (stream React components), `Agent` abstraction, tool **approval**, **AI Elements** prebuilt components | Examples 02, 04, 06 — fastest path to streaming + structured UI |
+| [**Vercel AI SDK**](https://vercel.com/blog/ai-sdk-6) (v5, `ai` + `@ai-sdk/react`) | TS toolkit: streaming, **generative UI**, typed **custom data parts**, `useChat`, tool **approval** | **The streaming transport + client for every example** (01–06) |
 | [**assistant-ui**](https://www.assistant-ui.com/docs/runtimes/langchain) | Embeddable React chat: streaming, generative UI, human-in-the-loop; tight **LangGraph** runtime | The chat shell for all examples |
 | [**Agent Chat UI**](https://github.com/langchain-ai/agent-chat-ui) | LangChain's Next.js app that streams any LangGraph agent incl. tool calls & reasoning | Examples 03, 04 — clone-and-go trajectory/reasoning UI |
 | [**AG-UI / CopilotKit**](https://github.com/ag-ui-protocol/ag-ui) | Open **agent↔frontend event protocol** (adopted by Google, AWS, MS, LangChain, Mastra) + React stack | Example 03, 06 — standardized event stream + HITL |
-| **Anthropic SDK** | Native **Citations API** and **extended thinking** | Examples 01, 04 — the *grounded* (non-hallucinated) primitives |
+| **Anthropic SDK** | Native **Citations API** and **extended thinking**, streamed into AI SDK data parts | Examples 01, 04 — the *grounded* (non-hallucinated) primitives |
 | **PDF.js / Papyrus / react-pdf-highlighter** | Document rendering + text-layer highlighting | Example 05 |
 
-**Recommended default stack:** Next.js + **Vercel AI SDK** (or **assistant-ui**)
-for the front end, a **LangGraph** agent behind **AG-UI** for anything with tools
-or approval, and the **Anthropic SDK** directly wherever grounded citations or
-reasoning tokens are the point. This keeps every example a thin, swappable slice
-rather than one monolithic app.
+**Recommended default stack:** Next.js + **Vercel AI SDK** (`useChat` +
+`createUIMessageStream`) as the streaming shell for **every** example, with the
+**Anthropic SDK** supplying the grounded primitives (citation char-ranges,
+reasoning tokens) *inside* that stream as typed custom data parts, and a
+**LangGraph** agent behind **AG-UI** for anything with tools or approval (03, 06).
+Streaming is the baseline, not an add-on: partial output with live provenance is
+itself a trust feature. This keeps every example a thin, swappable slice rather
+than one monolithic app.
 
 ---
 
