@@ -1,16 +1,22 @@
-import type { AskResponse, SourceDoc } from "./types";
+import type { SourceDoc } from "./types";
+import type { SegmentWriter } from "./segment-writer";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * A recorded, deterministic response for the sample question over the sample
- * docs — so the demo runs (and the UI can be reviewed) without an API key, in the
- * same spirit as the sibling `rlm-deep-agents` examples.
+ * A recorded, deterministic answer streamed into `out` at a realistic cadence —
+ * so the demo shows the *streaming* UX (text filling in, markers popping after
+ * their sentence) without an API key, in the spirit of `rlm-deep-agents`.
  *
- * Char ranges are computed from the live document text at call time, so they stay
- * correct even if the sample copy is edited. This is a stand-in for the API, not
- * a substitute — it only knows the one canned answer.
+ * Char ranges are resolved from the live sample text with `indexOf`, so they stay
+ * correct even if the sample copy is edited. This stands in for the API, not
+ * replaces it: it only knows this one canned answer.
  */
-export function mockAnswer(docs: SourceDoc[]): AskResponse {
-  const find = (id: string, needle: string) => {
+export async function streamMockAnswer(
+  out: SegmentWriter,
+  docs: SourceDoc[],
+): Promise<void> {
+  const span = (id: string, needle: string) => {
     const doc = docs.find((d) => d.id === id)!;
     const startChar = doc.text.indexOf(needle);
     return {
@@ -22,47 +28,44 @@ export function mockAnswer(docs: SourceDoc[]): AskResponse {
     };
   };
 
-  const c1 = {
-    n: 1,
-    ...find(
-      "refund-policy",
-      "Enterprise plans have a 30-day refund window from the invoice date.",
-    ),
-  };
-  const c2 = {
-    n: 2,
-    ...find(
-      "refund-policy",
-      "Refunds on Enterprise plans require sign-off from the account's assigned Customer Success Manager.",
-    ),
-  };
-  const c3 = {
-    n: 3,
-    ...find(
-      "enterprise-terms",
-      "after that window, prepaid fees are non-refundable.",
-    ),
-  };
+  const script: Array<
+    { text: string } | { cite: Parameters<SegmentWriter["citation"]>[0] }
+  > = [
+    { text: "Enterprise plans have a 30-day refund window, measured from the invoice date. " },
+    {
+      cite: span(
+        "refund-policy",
+        "Enterprise plans have a 30-day refund window from the invoice date.",
+      ),
+    },
+    { text: "There are two conditions: the refund requires sign-off from the account's assigned Customer Success Manager, " },
+    {
+      cite: span(
+        "refund-policy",
+        "Refunds on Enterprise plans require sign-off from the account's assigned Customer Success Manager.",
+      ),
+    },
+    { text: "and it must fall inside that window — once the 30 days pass, prepaid fees are non-refundable. " },
+    {
+      cite: span(
+        "enterprise-terms",
+        "after that window, prepaid fees are non-refundable.",
+      ),
+    },
+    { text: "(Note: the 14-day figure applies only to self-serve Starter/Pro plans, not Enterprise.)" },
+  ];
 
-  return {
-    blocks: [
-      {
-        text: "Enterprise plans have a 30-day refund window, measured from the invoice date. ",
-        citations: [c1],
-      },
-      {
-        text: "There are two conditions: the refund requires sign-off from the account's assigned Customer Success Manager, ",
-        citations: [c2],
-      },
-      {
-        text: "and it must fall inside that window — once the 30 days pass, prepaid fees are non-refundable. ",
-        citations: [c3],
-      },
-      {
-        text: "(Note: the 14-day figure applies only to self-serve Starter/Pro plans, not Enterprise.)",
-        citations: [],
-      },
-    ],
-    citations: [c1, c2, c3],
-  };
+  for (const step of script) {
+    if ("text" in step) {
+      // Stream word-by-word so the client sees a real token cadence.
+      for (const word of step.text.split(/(\s+)/)) {
+        out.text(word);
+        await sleep(18);
+      }
+    } else {
+      await sleep(120);
+      out.citation(step.cite);
+    }
+  }
+  out.end();
 }
