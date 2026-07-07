@@ -26,7 +26,7 @@ time and demo each on its own.
 |---|---------|-----------|-------------------------------|
 | 01 | **Grounded Citations** | Citations | *"Where did this specific claim come from?"* |
 | 02 | **Progressive Disclosure** | Expandable cards / links | *"Show me more — but only when I ask."* |
-| 03 | **Agent Walkthrough** | Iterative walkthroughs | *"Replay how you got here, step by step."* |
+| 03 | **Working in the Open** | Iterative walkthroughs | *"Reveal your decisions as you go — don't make me validate 300 at the end."* |
 | 04 | **Reasoning as Proof** | Reasoning tokens as proof | *"Show your working, not just the answer."* |
 | 05 | **Document Attribution** | Clickable nav + highlighting | *"Jump me to the exact place in the source."* |
 | 06 | **Approval / Human-in-the-loop** | (from README: *act with approval*) | *"Ask me before you actually do it."* |
@@ -84,24 +84,29 @@ schema so the tree streams in and renders top-down.
 
 ---
 
-### 03 · Agent Walkthrough (trajectory replay)
-**What the user sees.** A timeline of the agent's run: each step is a card —
-*thought → tool call → observation*. The user can step forward/back, expand any
-tool call to see inputs/outputs, and see intermediate state. It reframes an
-opaque "the agent did stuff" into an auditable, replayable trajectory.
+### 03 · Working in the Open  ✅ *built — [`examples/03-agent-walkthrough`](./examples/03-agent-walkthrough)*
+**Reframed from "trajectory replay."** Passive replay of a finished run is too
+late: when an agent works for 30 minutes over a large corpus, it makes hundreds of
+implicit decisions, and dumping them all at the end forces the user to validate
+everything cold. So 03 is **live, incremental decision surfacing** — the agent
+reveals its consequential calls *as it works* and gets them validated in flight.
 
-**Sample input.** A recorded agent run (a LangGraph thread, or a saved trace) —
-e.g. a research task that made 4 tool calls. Replay from the saved events; no
-live model needed for the demo.
+**What the user sees.** A live **decision ledger** filling in as the agent works a
+30-lease portfolio. Routine calls stream by as auditable receipts; uncertain or
+high-impact ones become **checkpoints** that stop the run for Approve / Correct /
+**Set-policy**. A **trust dial** sets how much it interrupts.
 
-**Approach.** Stream the agent's **events**, not just its final message. This is
-exactly what the [**AG-UI protocol**](https://github.com/ag-ui-protocol/ag-ui)
-standardizes (tool-call-start, tool-result, state-delta, …). Persist events, then
-render them as a scrubber-driven timeline.
+**The core idea.** Make the user's validation effort grow **sublinearly** with the
+corpus, via four levers: **confidence-gating** (only uncertain/high-impact calls
+interrupt), **phase gates** (stop compounding at boundaries), **policy promotion**
+(one correction resolves a whole class — the demo's "1 decision → 8 leases"
+moment), and the **trust dial**. This pulls human-in-the-loop forward from 06 (06
+gates an external *action*; 03 validates analytical *decisions*).
 
-**Stack.** LangGraph backend + [**Agent Chat UI**](https://github.com/langchain-ai/agent-chat-ui)
-(Next.js app that already streams tool calls & reasoning), *or* CopilotKit/AG-UI
-for the event stream. Store the trace as JSON for deterministic replay.
+**Stack.** Same `useChat` + custom-data-parts spine as 01, extended to a stateful,
+interruptible, pause/resume run. Production HITL swaps in LangGraph `interrupt()`
+or the AI SDK tool-approval flow. See [`PLAN.md`](./examples/03-agent-walkthrough/PLAN.md)
+for the full design rationale.
 
 ---
 
