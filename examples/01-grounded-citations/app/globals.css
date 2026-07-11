@@ -11,6 +11,10 @@
   --warn-soft: #3a2f1a;
   --highlight: #b8862b;
   --highlight-soft: #4a3a12;
+  --ok: #4ade80;
+  --ok-soft: #16321f;
+  --bad: #ff7a7a;
+  --bad-soft: #3a1c1c;
 }
 
 * {
@@ -75,6 +79,23 @@ button {
 button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
 }
 
 .split {
@@ -205,6 +226,183 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   vertical-align: middle;
+}
+
+/* --- inline reconciliation (judge vs. structural signal) --- */
+.mismatch {
+  border-bottom: 1px solid var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  cursor: help;
+}
+
+.verified {
+  border-bottom: 1px solid var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  cursor: help;
+}
+
+.recon-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.recon-badge.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.recon-badge.bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.recon-badge.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* --- faithfulness judge pill --- */
+.judge {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.judge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.judge-pill.judging {
+  color: var(--muted);
+  cursor: default;
+}
+
+.judge-pill.pass {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  color: var(--ok);
+}
+
+.judge-pill.fail {
+  background: var(--bad-soft);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  color: var(--bad);
+}
+
+.judge-mark {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.judge-score {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.judge-count {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.judge-caret {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.judge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.judge-detail {
+  margin-top: 12px;
+}
+
+.judge-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.judge-claims {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.claim {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.claim-status {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.claim.verified .claim-status {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.claim.flagged .claim-status {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.claim-text {
+  color: var(--text);
+}
+
+.claim-rationale {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
 }
 
 /* --- source pane --- */

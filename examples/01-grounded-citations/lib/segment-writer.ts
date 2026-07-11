@@ -1,5 +1,5 @@
 import type { UIMessageStreamWriter } from "ai";
-import type { Citation, ReviewUIMessage } from "./types";
+import type { AnswerSegment, Citation, ReviewUIMessage } from "./types";
 
 /**
  * Turns a linear stream of *text* and *citation* events into ordered AI SDK
@@ -18,16 +18,24 @@ export class SegmentWriter {
   private open = false;
   private seen = new Map<string, Citation>();
   private count = 0;
+  private full = "";
+  // The rendered answer as an ordered list of text runs, each tagged with the
+  // citations attached to it. `segs[i]` is exactly the i-th `text` part the client
+  // renders (`s{i}`), so the judge and the UI index segments identically.
+  private segs: AnswerSegment[] = [];
 
   constructor(private readonly writer: UIMessageStreamWriter<ReviewUIMessage>) {}
 
   /** Append streamed answer text to the current segment. */
   text(delta: string): void {
     if (!delta) return;
+    this.full += delta;
     if (!this.open) {
+      this.segs.push({ text: "", cites: [] });
       this.writer.write({ type: "text-start", id: `s${this.seg}` });
       this.open = true;
     }
+    this.segs[this.segs.length - 1].text += delta;
     this.writer.write({ type: "text-delta", id: `s${this.seg}`, delta });
   }
 
@@ -40,12 +48,29 @@ export class SegmentWriter {
       citation = { n: ++this.count, ...span };
       this.seen.set(key, citation);
     }
+    // Attach to the run this citation grounds — the one just closed by flush().
+    this.segs[this.segs.length - 1]?.cites.push(citation);
     this.writer.write({ type: "data-citation", data: citation });
   }
 
   /** Close the final text segment. Call once when the source stream ends. */
   end(): void {
     this.flush();
+  }
+
+  /** The full assembled answer text — what the faithfulness judge scores. */
+  fullText(): string {
+    return this.full;
+  }
+
+  /** The unique grounded citations produced, in first-seen order. */
+  citations(): Citation[] {
+    return [...this.seen.values()];
+  }
+
+  /** The rendered answer as text runs + their citations — what the judge scores. */
+  segments(): AnswerSegment[] {
+    return this.segs;
   }
 
   private flush(): void {

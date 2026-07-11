@@ -1,5 +1,6 @@
-import type { SourceDoc } from "./types";
+import type { AnswerSegment, FaithfulnessVerdict, SourceDoc } from "./types";
 import type { SegmentWriter } from "./segment-writer";
+import { assembleVerdict } from "./judge";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -68,4 +69,50 @@ export async function streamMockAnswer(
     }
   }
   out.end();
+}
+
+/**
+ * A recorded verdict for the canned answer, so the judge UI works without a key.
+ * It's keyed to the mock script's four segments (see `streamMockAnswer`). The
+ * story it tells: the answer's one *uncited* segment (index 3) — the 14-day
+ * Starter/Pro line the app flags `ungrounded` — is in fact **supported** (the
+ * Refund Policy defines the 14-day self-serve window; Ticket #4821's internal note
+ * confirms it excludes Enterprise). So the judge *corrects* a blind structural
+ * flag inline: uncited ≠ unsupported. The three cited segments check out too.
+ */
+export function mockFaithfulnessVerdict(
+  segments: AnswerSegment[],
+): FaithfulnessVerdict {
+  return assembleVerdict(
+    segments,
+    96,
+    [
+      {
+        index: 0,
+        status: "supported",
+        rationale: "30-day Enterprise window stated verbatim in the Refund Policy.",
+        docId: "refund-policy",
+      },
+      {
+        index: 1,
+        status: "supported",
+        rationale: "CSM sign-off is listed as an Enterprise condition.",
+        docId: "refund-policy",
+      },
+      {
+        index: 2,
+        status: "supported",
+        rationale: "Enterprise Terms §4: after the window, prepaid fees are non-refundable.",
+        docId: "enterprise-terms",
+      },
+      {
+        index: 3,
+        status: "supported",
+        rationale:
+          "Uncited, but the Refund Policy defines the 14-day self-serve window and Ticket #4821 confirms it excludes Enterprise — the 'ungrounded' flag is a false alarm.",
+        docId: "refund-policy",
+      },
+    ],
+    "recorded-mock",
+  );
 }
