@@ -224,9 +224,14 @@ need approval."
 
 ### State & resume
 The decision ledger, active phase, corpus cursor, and adopted policies are the
-run's state. For the demo, carry it in the message history / a server-side session
-keyed by thread id; note in the doc that production would persist a real thread
-(LangGraph `interrupt()` is the natural fit and maps 1:1 onto this design).
+run's state. In the built mock this is split deliberately: the **server holds only
+the resume position** (an in-memory `SESSIONS` map of `{cursor, dial}` keyed by
+thread id), and the **client holds the whole ledger**, reconstructed on every
+render by folding the streamed `data-*` parts (`lib/ledger.ts`). The "interrupt" is
+not a suspended process — it's the player `return`-ing out of its loop at a blocking
+checkpoint, with the cursor saved; a resolution is a fresh POST that re-enters and
+resumes from the cursor. See **Live agent implementation — core decisions** below
+for how this maps to the live build (and why it is *not* LangGraph).
 
 ### Mock-first choreography (primary artifact)
 As with 01/02, the **no-key mock is first-class** — and here it's the *main* way we
@@ -265,6 +270,80 @@ interface Decision {
 interface Policy { id: string; rule: string; appliesTo: string; fromDecision: string; }
 ```
 
+## Live agent implementation — core decisions (next)
+
+> The mock is built and choreographs the exact trust beats. The next phase swaps
+> `buildScript`/`playRun` for a real agent loop over the small corpus. Two
+> architectural calls were made up front so that swap doesn't re-litigate the
+> foundation. Both are captured here as the decisions of record.
+
+### Decision 1 — No LangGraph. Native AI SDK + a thin durable thread store.
+
+The interrupt does **not** need coroutine-style suspension; it needs *durable state
+keyed by thread id*. That's a persistence decision, not a framework decision — and
+the built mock already proves the shape works with `return` + a saved cursor and no
+framework at all. So the live agent stays **AI-SDK-native**:
+
+- Keep `createUIMessageStream` and the client-side `reduceParts` reducer **as-is**.
+- Replace the in-memory `SESSIONS` map with a **thread row** (Postgres/Redis) keyed
+  by `sessionId`: processed items, pending resolutions, adopted policies, dial. The
+  cursor becomes "next unprocessed item."
+- Make the ledger **server-authoritative** so a page refresh rehydrates from thread
+  state (fixes the one real bug the demo has — refresh currently loses the ledger,
+  because the server only remembers the cursor).
+- Swap the scripted player for a loop that calls the model **per item** with a
+  structured-output schema matching `Decision` (confidence + evidence + kind), and
+  keep `shouldBlock(level, dial)` **verbatim** — the gate logic is already right.
+
+**Why not LangGraph.** It maps cleanly (its `interrupt()`/`Command(resume)` is 1:1
+with our `return`+cursor, and its checkpointer would solve durability), but: the
+workflow here is essentially **linear** (triage → deep-read → synthesis) with
+per-item pauses — no branching, cycles, or sub-agents, which is where LangGraph
+earns its keep. The whole app is built around the AI SDK's streaming; LangGraph JS
+has its own streaming model, so we'd pay an impedance cost bridging its events into
+the `UIMessage` stream. And LangGraph does **nothing** for the actual hard problem
+here — eliciting calibrated confidence + evidence per decision, which is
+prompt/structured-output work. For a **demo staying a demo**, it's added dependency
+and surface for no visible behavior change. Revisit only if the workflow grows real
+branching/sub-agents or needs multi-session replay.
+
+`[DECISION] State/interrupt framework for live agent | Rec: AI-SDK-native + thin
+durable thread store; no LangGraph | Risk: low | Reversible? Y`
+
+### Decision 2 — LangSmith tracing via the LangSmith SDK (independent of Decision 1).
+
+Tracing is **orthogonal to LangGraph** — the LangSmith SDK traces any function, so
+dropping LangGraph costs us nothing here. Two composing layers form one trace tree:
+
+1. **Orchestration spans — `traceable`.** JS has no ergonomic decorators, so wrap
+   functions with the `traceable` higher-order helper (`langsmith/traceable`).
+   Nested `traceable` calls auto-nest as spans via `AsyncLocalStorage`. Wrap the
+   run loop and the per-item `decideOne`, and attach the gate outcome
+   (`shouldBlock` result, dial, confidence, impact) as span metadata — so the trace
+   shows *why* each item blocked or auto-resolved, which is the thing worth
+   inspecting in this app.
+2. **Model spans — AI SDK telemetry → LangSmith exporter.** We're on the Vercel AI
+   SDK, so use its telemetry hook rather than hand-wrapping the provider. Register
+   `AISDKExporter` (`langsmith/vercel`) once in `instrumentation.ts` via
+   `registerOTel`, and set `experimental_telemetry: { isEnabled: true }` on each
+   `generateObject`/`generateText` call. Model, tokens, latency, and prompt/
+   completion then appear as spans nested under the active `traceable` context.
+
+Setup is otherwise just env vars — `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`,
+`LANGSMITH_PROJECT` — no other wiring.
+
+**Caveats.** (a) Verify the exact export names against the pinned LangSmith JS
+version — `traceable` and `AISDKExporter` are the right primitives but the AI-SDK
+integration surface has churned across versions. (b) Serverless would need an
+explicit trace flush at the end of the route handler (LangSmith batches in the
+background and a frozen function drops them); irrelevant while this runs locally on
+a long-lived `next dev`. (c) Tracing only produces anything once there are real
+model calls, so wire it in as part of the same change that makes the agent live —
+there's nothing to trace in the choreographed run (`data-mode {mocked:true}`).
+
+`[DECISION] Observability for live agent | Rec: LangSmith SDK — `traceable` for
+orchestration + `AISDKExporter` for model spans | Risk: low | Reversible? Y`
+
 ## Build plan / milestones
 
 1. **Corpus + script.** Author the 30-lease synthetic corpus with the planted
@@ -278,7 +357,9 @@ interface Policy { id: string; rule: string; appliesTo: string; fromDecision: st
    entries live; `PolicyBanner`. This is the demo's centerpiece — build it
    deliberately.
 5. **Phases + trust dial.** `PhaseTimeline` gates and the `TrustDial` threshold.
-6. **Live mode + docs.** Wire the real agent loop; write the README + walkthrough.
+6. **Live mode + docs.** Wire the real agent loop per the two **core decisions**
+   above — AI-SDK-native with a durable thread store (no LangGraph), LangSmith
+   tracing via `traceable` + `AISDKExporter`; write the README + walkthrough.
 
 ## Open questions for you
 
