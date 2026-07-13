@@ -1,15 +1,15 @@
 import type { Checkpoint, Decision, Phase } from "./types";
+import type { BlockLevel } from "./gate";
 import { LEASES, MERIDIAN_IDS, NO_EXIT_IDS } from "./corpus";
 
 // The choreographed run. A flat list of events the server "plays" — streaming
 // receipts until it reaches a checkpoint that, given the trust dial, should block.
-// This is the v1 substitute for a live agent: it lets us stage the exact trust
+// This is the mock substitute for a live agent: it lets us stage the exact trust
 // beats (the #12 blocker, the 8-lease policy moment, the phase gates) precisely.
+// `BlockLevel` and the gate itself now live in `./gate`, shared with the live
+// agent so the two paths can't drift.
 
-export type BlockLevel =
-  | "always" // blocks at every dial setting (gates, and things a human MUST decide)
-  | "gated" // blocks unless the dial is at full autonomy
-  | "oversight"; // blocks only at the most cautious dial setting
+export type { BlockLevel } from "./gate";
 
 export type ScriptEvent =
   | { t: "phase"; phase: Phase }

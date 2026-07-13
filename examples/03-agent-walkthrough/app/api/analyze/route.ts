@@ -1,9 +1,17 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { playRun } from "@/lib/run";
+import { runLiveAgent } from "@/lib/agent";
+import {
+  getOrCreateThread,
+  getThread,
+  ledgerSnapshot,
+  ThreadRecorder,
+} from "@/lib/thread";
 import type { LeaseUIMessage, Resolution, TrustDial } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// A live slice can run several model calls before the next checkpoint.
+export const maxDuration = 120;
 
 interface Body {
   sessionId?: string;
@@ -16,12 +24,37 @@ export async function POST(req: Request): Promise<Response> {
   const sessionId = body.sessionId || "default";
   const dial: TrustDial = body.dial || "balanced";
 
+  // No key → the choreographed mock; a key → a real agent loop over the corpus.
+  const mocked = !process.env.ANTHROPIC_API_KEY;
+  const { thread, created } = getOrCreateThread(sessionId, dial, mocked);
+
   const stream = createUIMessageStream<LeaseUIMessage>({
     execute: async ({ writer }) => {
-      await playRun(writer, { sessionId, dial, resolution: body.resolution });
+      if (created) {
+        thread.started = true;
+        writer.write({ type: "data-mode", data: { mocked }, transient: true });
+      }
+      const rec = new ThreadRecorder(writer, thread);
+      if (mocked) {
+        await playRun(rec, thread, body.resolution);
+      } else {
+        await runLiveAgent(rec, thread, body.resolution);
+      }
     },
     onError: (e) => (e instanceof Error ? e.message : "Run failed"),
   });
 
   return createUIMessageStreamResponse({ stream });
+}
+
+/**
+ * Rehydrate a run after a page refresh. The ledger is server-authoritative (held
+ * in the thread), so the client can rebuild its whole state from this instead of
+ * losing everything the way a client-only ledger would.
+ */
+export async function GET(req: Request): Promise<Response> {
+  const sessionId = new URL(req.url).searchParams.get("sessionId");
+  const thread = sessionId ? getThread(sessionId) : undefined;
+  if (!thread) return Response.json({ found: false });
+  return Response.json({ found: true, ...ledgerSnapshot(thread) });
 }

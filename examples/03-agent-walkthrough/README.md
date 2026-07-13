@@ -67,9 +67,20 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-v1 is a **choreographed run** — no model key needed. It's staged to hit the exact
-trust beats deterministically (the `#12` blocker, the 8-lease policy moment, the
-phase gates). A live agent loop is the documented next step.
+**Two modes, same UI:**
+
+- **No key → choreographed mock.** Deterministic, staged to hit the exact trust
+  beats (the `#12` blocker, the 8-lease policy moment, the phase gates). This is
+  the primary artifact — it lets us control the demo precisely.
+- **`ANTHROPIC_API_KEY` set → live agent.** Copy `.env.example` to `.env.local`,
+  add a key, and the same UI runs a **real agent loop** that reads the corpus and
+  scores each decision itself. The gate is identical (`lib/gate.ts` is shared),
+  so which calls interrupt now falls out of the model's own confidence + impact
+  rather than a script. Optionally set the `LANGSMITH_*` vars to trace every run.
+
+```bash
+cp .env.example .env.local   # add ANTHROPIC_API_KEY for live mode
+```
 
 ## What to try
 
@@ -96,11 +107,15 @@ phase gates). A live agent loop is the documented next step.
 | File | Role |
 |------|------|
 | `lib/corpus.ts` | The 30 leases + planted ambiguities |
-| `lib/script.ts` | The choreographed event list (phases, receipts, checkpoints) |
-| `lib/run.ts` | Server player: streams until a checkpoint blocks; resumes on resolution; confidence-gating + policy promotion |
+| `lib/script.ts` | The choreographed event list (phases, receipts, checkpoints) for the mock |
+| `lib/run.ts` | Mock player: streams until a checkpoint blocks; resumes on resolution |
+| `lib/agent.ts` | **Live agent**: real per-item model loop (`generateObject`) over the corpus, same beats, traced |
+| `lib/gate.ts` | The shared gate — `shouldBlock` (verbatim across both modes) + confidence→`BlockLevel` |
+| `lib/thread.ts` | Durable, server-authoritative thread store + the recorder that mirrors every part into it |
 | `lib/ledger.ts` | Client reducer: parts → decision ledger |
 | `lib/types.ts` | Decision / Checkpoint / Policy model + typed message |
-| `app/api/analyze/route.ts` | `createUIMessageStream` endpoint |
+| `app/api/analyze/route.ts` | `createUIMessageStream` endpoint (mock vs live) + GET rehydrate |
+| `instrumentation.ts` | Wires AI SDK telemetry → LangSmith (live-mode tracing) |
 | `components/CheckpointCard.tsx` | The blocking approve / correct / set-policy card |
 | `components/DecisionLedger.tsx` | The live, filterable ledger |
 | `components/Sidebar.tsx` | Trust dial · phase timeline · policy banner |
@@ -109,14 +124,32 @@ phase gates). A live agent loop is the documented next step.
 Full step-by-step:
 [`../../walkthroughs/03-working-in-the-open.md`](../../walkthroughs/03-working-in-the-open.md).
 
+## How the live agent works
+
+The live loop (`lib/agent.ts`) walks the **same linear plan of beats** as the mock
+(triage → deep-read → synthesis, with the Meridian class and the phase gates), but
+fills each decision's content with a real `generateObject` call that self-scores
+confidence, impact, and evidence. `lib/gate.ts` turns those numbers into whether a
+call interrupts — so confidence-gating is genuine, not staged. Two design calls
+from [`PLAN.md`](./PLAN.md) are realized:
+
+- **No LangGraph.** The interrupt is `return` + a saved cursor in a durable thread
+  (`lib/thread.ts`), and a resolution is a fresh POST that re-enters and resumes.
+  The thread holds the **authoritative ledger**, so a page refresh rehydrates
+  (`GET /api/analyze`) instead of losing everything.
+- **LangSmith tracing.** `traceable` wraps the run loop and each `decideOne` (the
+  gate outcome — confidence, impact, whether it blocked — is attached as span
+  metadata), and `AISDKExporter` nests the model spans underneath. Enabled by env
+  vars only; a no-op when unset.
+
 ## Notes & next steps
 
-- **Why choreographed first?** The trust beats *are* the demo; scripting them makes
-  the experience deterministic and reviewable before wiring a live agent. The part
-  stream and the client are identical to what a live run would emit.
-- **Production HITL.** The pause/resume here is deliberately simple (a checkpoint
-  ends the turn; the resolution rides the next request). In production this is
-  exactly where **LangGraph `interrupt()`** or the **AI SDK tool-approval** flow
-  fits — the data model already matches.
+- **Why a mock *and* a live agent?** The trust beats *are* the demo, so the mock
+  stays first-class — it's how we choreograph them deterministically. The part
+  stream and the client are identical across both modes; only the source of each
+  decision differs (script vs. model).
+- **Production HITL & durability.** The thread store is an in-memory `Map` — a
+  demo-grade stand-in. It's a *persistence* choice, not a framework one: swap it
+  for a Postgres/Redis row keyed by `sessionId` and nothing in the agent changes.
 - **Relationship to 06.** This is human-in-the-loop for *analytical decisions*;
   example 06 applies the same machinery to approving an *external action*.
