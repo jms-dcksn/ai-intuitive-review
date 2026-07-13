@@ -110,24 +110,31 @@ for the full design rationale.
 
 ---
 
-### 04 · Reasoning as Proof
-**What the user sees.** The model's **extended-thinking** stream shown in a
-distinct, de-emphasized "reasoning" channel above the answer — collapsible,
-clearly labeled as the model's private working, with the final answer visually
-separated. Turns invisible chain-of-thought into inspectable proof-of-work.
+### 04 · Reasoning as Proof  ✅ *built — [`examples/04-reasoning-as-proof`](./examples/04-reasoning-as-proof)*
+**What the user sees.** The model's **extended-thinking** stream in a distinct,
+de-emphasized reasoning channel — a live, auto-scrolling ticker while the model
+works, auto-collapsing to a receipt ("reasoned for 12s · 340 words — show
+working") the moment the answer starts. Turns invisible chain-of-thought into
+inspectable proof-of-work that never visually outranks the answer.
 
-**Sample input.** Any question that benefits from reasoning (a multi-step
-calculation, a policy judgement call). Enable thinking on the model call.
+**Sample input.** A contract-termination judgment call with real arithmetic: a
+customer with three consecutive SLA misses wants out of a prepaid annual deal —
+is that a for-cause termination, and what exactly is the refund? Two clauses
+interact (chronic failure vs. sole-remedy), so the working genuinely matters.
 
 **Approach.** Use **native reasoning tokens**, not a "think step by step" hack:
-Anthropic **extended thinking** returns `thinking` content blocks separate from
-the answer. Stream them into a dedicated reasoning region. Key UX rules: label it
-as *reasoning* (not fact), keep it collapsed by default, and never let it visually
-outrank the answer.
+Anthropic **adaptive thinking** (`thinking: {type: "adaptive", display:
+"summarized"}` — the current API; fixed `budget_tokens` is gone) returns
+`thinking` content blocks separate from the answer. Stream `thinking_delta` vs
+`text_delta` into the AI SDK's **first-class `reasoning` parts** vs text parts.
+Key UX rules: label it as *deliberation* (not fact), collapse it once the answer
+lands, and be honest about provenance — the trace is a summarized view, and an
+easy question may produce no trace at all.
 
-**Stack.** Anthropic SDK with `thinking` enabled (stream `thinking_delta` vs
-`text_delta` into different panes). Both AI SDK and Agent Chat UI already have
-first-class "reasoning" rendering slots.
+**Stack.** Same `useChat` + `createUIMessageStream` spine as 01/03; the
+reasoning channel rides the AI SDK's native `reasoning-start/-delta/-end`
+chunks, so any AI-SDK-compatible chat surface renders it unmodified. See
+[`PLAN.md`](./examples/04-reasoning-as-proof/PLAN.md) for the design rationale.
 
 ---
 
