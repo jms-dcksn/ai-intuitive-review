@@ -270,12 +270,15 @@ interface Decision {
 interface Policy { id: string; rule: string; appliesTo: string; fromDecision: string; }
 ```
 
-## Live agent implementation — core decisions (next)
+## Live agent implementation — core decisions (BUILT)
 
-> The mock is built and choreographs the exact trust beats. The next phase swaps
-> `buildScript`/`playRun` for a real agent loop over the small corpus. Two
-> architectural calls were made up front so that swap doesn't re-litigate the
-> foundation. Both are captured here as the decisions of record.
+> **Status: built.** The mock still choreographs the exact trust beats; a live
+> agent loop (`lib/agent.ts`) now runs alongside it, selected by `ANTHROPIC_API_KEY`.
+> It walks the same linear plan of beats but fills each decision with a real
+> `generateObject` call, so confidence-gating falls out of the model's own numbers
+> via the shared `lib/gate.ts`. The two architectural calls below were made up
+> front so the swap didn't re-litigate the foundation; both are realized as
+> described.
 
 ### Decision 1 — No LangGraph. Native AI SDK + a thin durable thread store.
 
@@ -357,9 +360,10 @@ orchestration + `AISDKExporter` for model spans | Risk: low | Reversible? Y`
    entries live; `PolicyBanner`. This is the demo's centerpiece — build it
    deliberately.
 5. **Phases + trust dial.** `PhaseTimeline` gates and the `TrustDial` threshold.
-6. **Live mode + docs.** Wire the real agent loop per the two **core decisions**
-   above — AI-SDK-native with a durable thread store (no LangGraph), LangSmith
-   tracing via `traceable` + `AISDKExporter`; write the README + walkthrough.
+6. **Live mode + docs.** ✅ Built. The real agent loop is wired per the two **core
+   decisions** above — AI-SDK-native with a durable, server-authoritative thread
+   store (no LangGraph), LangSmith tracing via `traceable` + `AISDKExporter`. See
+   `lib/agent.ts`, `lib/thread.ts`, `lib/gate.ts`, `instrumentation.ts`.
 
 ## Open questions for you
 
