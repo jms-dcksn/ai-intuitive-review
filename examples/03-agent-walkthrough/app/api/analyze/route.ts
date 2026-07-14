@@ -24,8 +24,10 @@ export async function POST(req: Request): Promise<Response> {
   const sessionId = body.sessionId || "default";
   const dial: TrustDial = body.dial || "balanced";
 
-  // No key → the choreographed mock; a key → a real agent loop over the corpus.
-  const mocked = !process.env.ANTHROPIC_API_KEY;
+  // MOCK_MODE=true forces the choreographed mock even if a key is present
+  // (e.g. exported in the shell). Otherwise: no key → mock, key → live agent.
+  const mocked =
+    process.env.MOCK_MODE === "true" || !process.env.ANTHROPIC_API_KEY;
   const { thread, created } = getOrCreateThread(sessionId, dial, mocked);
 
   const stream = createUIMessageStream<LeaseUIMessage>({

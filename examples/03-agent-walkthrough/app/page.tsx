@@ -20,7 +20,7 @@ export default function Home() {
   const [mocked, setMocked] = useState(false);
   const rehydrated = useRef(false);
 
-  const { messages, sendMessage, setMessages, status } = useChat<LeaseUIMessage>({
+  const { messages, sendMessage, setMessages, status, error, clearError } = useChat<LeaseUIMessage>({
     transport: new DefaultChatTransport({
       api: "/api/analyze",
       // We drive everything through a structured body, not a message list.
@@ -89,11 +89,13 @@ export default function Home() {
     setResolved(new Set());
     setStarted(true);
     setMessages([]); // drop any rehydrated run
+    clearError();
     sendMessage({ text: "start" }, { body: { sessionId: sid, dial } });
   }
 
   function resolve(r: Resolution) {
     setResolved((prev) => new Set(prev).add(r.checkpointId));
+    clearError();
     sendMessage({ text: "resolve" }, { body: { sessionId, dial, resolution: r } });
   }
 
@@ -128,6 +130,12 @@ export default function Home() {
 
       <div className="layout">
         <div className="main">
+          {error && (
+            <div className="error-banner">
+              The run failed: {error.message || "unknown error"}. Hit{" "}
+              {started ? "Restart" : "Start analysis"} to try again.
+            </div>
+          )}
           {pending && (
             <CheckpointCard checkpoint={pending} disabled={streaming} onResolve={resolve} />
           )}

@@ -43,6 +43,7 @@ button.ghost { background: transparent; color: var(--text); border: 1px solid va
 button.ghost:hover:not(:disabled) { border-color: var(--muted); }
 
 .mock-banner { background: var(--amber-soft); color: var(--amber); border: 1px solid #52441f; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 14px; }
+.error-banner { background: var(--red-soft); color: var(--red); border: 1px solid #5a2b30; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 14px; }
 .hint { color: var(--muted); font-size: 13px; }
 
 .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }

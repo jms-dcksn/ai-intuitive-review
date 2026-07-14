@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { AISDKExporter } from "langsmith/vercel";
 import { getCurrentRunTree, traceable } from "langsmith/traceable";
@@ -57,14 +57,42 @@ const DECISION_SYSTEM = [
   "  (empty if there is genuinely nothing to read).",
 ].join("\n");
 
+// Lenient on purpose: a strict schema ("med", required alternatives) fails the
+// whole run when the model writes "medium" or omits an empty array. Normalize
+// those instead — the JSON schema the model sees keeps the strict enum.
+const ImpactSchema = z.preprocess((v) => {
+  const s = String(v ?? "").toLowerCase().trim();
+  return s.startsWith("med") ? "med" : s.startsWith("high") ? "high" : s.startsWith("low") ? "low" : v;
+}, z.enum(["low", "med", "high"]));
+
 const DecisionSchema = z.object({
   decided: z.string().describe("The call, one crisp clause."),
-  rationale: z.string().describe("One sentence of grounding."),
-  evidenceSnippet: z.string().describe("Exact span from the source text."),
-  confidence: z.number().min(0).max(1),
-  impact: z.enum(["low", "med", "high"]),
-  alternatives: z.array(z.string()).describe("Other plausible readings/values."),
+  rationale: z.string().default("").describe("One sentence of grounding."),
+  evidenceSnippet: z.string().default("").describe("Exact span from the source text."),
+  confidence: z.coerce.number().describe("Calibrated confidence, 0..1."),
+  impact: ImpactSchema,
+  alternatives: z.array(z.string()).default([]).describe("Other plausible readings/values."),
 });
+
+/**
+ * Last-resort recovery when generateObject rejects the response: the raw text
+ * often contains valid JSON wrapped in prose or fences. Re-parse it through the
+ * same lenient schema; rethrow the original error if that fails too.
+ */
+function salvage<T>(err: unknown, schema: z.ZodType<T, z.ZodTypeDef, unknown>): T {
+  if (NoObjectGeneratedError.isInstance(err) && err.text) {
+    const match = err.text.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        const parsed = schema.safeParse(JSON.parse(match[0]));
+        if (parsed.success) return parsed.data;
+      } catch {
+        // fall through to rethrow
+      }
+    }
+  }
+  throw err;
+}
 
 type DecideResult = {
   decision: Decision;
@@ -112,19 +140,24 @@ interface DecideInput {
  */
 const decideOne = traceable(
   async function decideOne(input: DecideInput): Promise<DecideResult> {
-    const { object } = await generateObject({
-      model: anthropic(MODEL),
-      schema: DecisionSchema,
-      system: DECISION_SYSTEM,
-      temperature: 0.1,
-      prompt: [
-        `Decision: ${input.question}`,
-        `Subject: ${input.subject}`,
-        `Source (${input.source}):`,
-        input.material,
-      ].join("\n"),
-      experimental_telemetry: AISDKExporter.getSettings({ runName: `decide:${input.subject}` }),
-    });
+    let object: z.infer<typeof DecisionSchema>;
+    try {
+      ({ object } = await generateObject({
+        model: anthropic(MODEL),
+        schema: DecisionSchema,
+        system: DECISION_SYSTEM,
+        temperature: 0.1,
+        prompt: [
+          `Decision: ${input.question}`,
+          `Subject: ${input.subject}`,
+          `Source (${input.source}):`,
+          input.material,
+        ].join("\n"),
+        experimental_telemetry: AISDKExporter.getSettings({ runName: `decide:${input.subject}` }),
+      }));
+    } catch (err) {
+      object = salvage(err, DecisionSchema);
+    }
 
     const impact: Impact = input.impactFloor
       ? maxImpact(object.impact, input.impactFloor)
@@ -427,7 +460,10 @@ async function runClass(rec: ThreadRecorder, thread: ThreadState, leases: Lease[
 /** Phase 3 — a short model-authored ranking rationale plus the final plan. */
 async function synthesize(rec: ThreadRecorder, thread: ThreadState): Promise<void> {
   const SynthSchema = z.object({
-    priorities: z.array(z.object({ subject: z.string(), decided: z.string(), rationale: z.string() })).min(2).max(3),
+    priorities: z
+      .array(z.object({ subject: z.string(), decided: z.string(), rationale: z.string().default("") }))
+      .min(1)
+      .describe("2-3 prioritization decisions."),
     summary: z.string(),
   });
 
@@ -435,26 +471,30 @@ async function synthesize(rec: ThreadRecorder, thread: ThreadState): Promise<voi
 
   const synth = traceable(
     async function synthesize() {
-      const { object } = await generateObject({
-        model: anthropic(MODEL),
-        schema: SynthSchema,
-        system: "You are ranking a portfolio of lease exits into a plan. Be concise and concrete.",
-        temperature: 0.2,
-        prompt: [
-          "Produce 2–3 prioritization decisions and a one-paragraph summary for a ranked exit plan.",
-          `Context: ${LEASES.length} leases analyzed. ${MERIDIAN_IDS.length} are Meridian Estates leases sharing one notice clause, now read ${meridianChoice}. #19's break fee awaited a figure the user supplied; #22 is a consent-gated surrender flagged as conditional.`,
-          "Rank by (earliest exit date, then break cost). Treat the Meridian eight as one negotiation lever.",
-        ].join("\n"),
-        experimental_telemetry: AISDKExporter.getSettings({ runName: "synthesize" }),
-      });
-      return object;
+      try {
+        const { object } = await generateObject({
+          model: anthropic(MODEL),
+          schema: SynthSchema,
+          system: "You are ranking a portfolio of lease exits into a plan. Be concise and concrete.",
+          temperature: 0.2,
+          prompt: [
+            "Produce 2–3 prioritization decisions and a one-paragraph summary for a ranked exit plan.",
+            `Context: ${LEASES.length} leases analyzed. ${MERIDIAN_IDS.length} are Meridian Estates leases sharing one notice clause, now read ${meridianChoice}. #19's break fee awaited a figure the user supplied; #22 is a consent-gated surrender flagged as conditional.`,
+            "Rank by (earliest exit date, then break cost). Treat the Meridian eight as one negotiation lever.",
+          ].join("\n"),
+          experimental_telemetry: AISDKExporter.getSettings({ runName: "synthesize" }),
+        });
+        return object;
+      } catch (err) {
+        return salvage(err, SynthSchema);
+      }
     },
     { name: "synthesize", run_type: "chain" },
   );
 
   const object = await synth();
 
-  object.priorities.forEach((p, i) => {
+  object.priorities.slice(0, 3).forEach((p, i) => {
     rec.write({
       type: "data-decision",
       data: {
