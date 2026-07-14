@@ -35,6 +35,20 @@ export async function POST(req: Request): Promise<Response> {
         writer.write({ type: "data-mode", data: { mocked }, transient: true });
       }
       const rec = new ThreadRecorder(writer, thread);
+      if (body.resolution && created) {
+        // A resolution for a session the server doesn't know: the dev server
+        // reloaded (or restarted) mid-run and the in-memory thread store was
+        // wiped. Replaying from cursor 0 would re-emit checkpoints the client
+        // already resolved and dead-end the UI — say so instead.
+        rec.write({
+          type: "data-done",
+          data: {
+            summary: "The server lost this run's state (dev reload mid-run). Hit Restart to run again.",
+            stats: "session lost",
+          },
+        });
+        return;
+      }
       if (mocked) {
         await playRun(rec, thread, body.resolution);
       } else {
