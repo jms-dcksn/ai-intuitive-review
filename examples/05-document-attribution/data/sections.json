@@ -1,0 +1,52 @@
+[
+  {
+    "id": "item-1",
+    "label": "Item 1 · Business",
+    "start": 16619
+  },
+  {
+    "id": "item-1a",
+    "label": "Item 1A · Risk Factors",
+    "start": 44948
+  },
+  {
+    "id": "item-1b",
+    "label": "Item 1B · Unresolved Staff Comments",
+    "start": 178309
+  },
+  {
+    "id": "item-2",
+    "label": "Item 2 · Properties",
+    "start": 182828
+  },
+  {
+    "id": "item-3",
+    "label": "Item 3 · Legal Proceedings",
+    "start": 183255
+  },
+  {
+    "id": "item-5",
+    "label": "Item 5 · Market for Common Equity",
+    "start": 185324
+  },
+  {
+    "id": "item-7",
+    "label": "Item 7 · MD&A",
+    "start": 187470
+  },
+  {
+    "id": "item-7a",
+    "label": "Item 7A · Market Risk",
+    "start": 234222
+  },
+  {
+    "id": "item-8",
+    "label": "Item 8 · Financial Statements",
+    "start": 237307
+  },
+  {
+    "id": "item-9a",
+    "label": "Item 9A · Controls and Procedures",
+    "start": 354835
+  }
+]

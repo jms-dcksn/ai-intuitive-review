@@ -1,0 +1,407 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2a2f3a;
+  --text: #e6e8ee;
+  --muted: #9aa3b2;
+  --accent: #6ea8fe;
+  --accent-soft: #23324f;
+  --warn: #f0b357;
+  --warn-soft: #3a2f1a;
+  --ok: #4ade80;
+  --bad: #ff7a7a;
+
+  --cat-risk-factor: #ff7a7a;
+  --cat-competitive: #f0b357;
+  --cat-financial-impact: #6ea8fe;
+  --cat-strategy: #4ade80;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+.app {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 24px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.header p {
+  color: var(--muted);
+  margin: 0 0 14px;
+  max-width: 100ch;
+  font-size: 14px;
+}
+
+.controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: var(--accent);
+  color: #0b1220;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ghost-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mode-banner {
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid #4a3d22;
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.warn-banner {
+  color: var(--bad);
+  background: #3a1f1f;
+  border-color: #55302f;
+}
+
+/* --- split layout ---------------------------------------------------- */
+
+.split {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.left {
+  flex: 0 0 400px;
+  min-width: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.right {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* --- task / answer ---------------------------------------------------- */
+
+.task-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.task-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.task-card p {
+  margin: 0;
+}
+
+.answer {
+  background: var(--accent-soft);
+  border: 1px solid #31456b;
+  border-radius: 10px;
+  padding: 13px 15px;
+  font-size: 13.5px;
+}
+
+/* --- findings ---------------------------------------------------------- */
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.finding {
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-weight: 400;
+  font-size: 13.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.finding:hover {
+  border-color: #3d4452;
+  background: var(--panel-2);
+}
+
+.finding.selected {
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.finding-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-dot.cat-risk-factor { background: var(--cat-risk-factor); }
+.cat-dot.cat-competitive { background: var(--cat-competitive); }
+.cat-dot.cat-financial-impact { background: var(--cat-financial-impact); }
+.cat-dot.cat-strategy { background: var(--cat-strategy); }
+
+.finding-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+.sev {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.sev-high { color: var(--bad); background: #3a1f1f; }
+.sev-medium { color: var(--warn); background: var(--warn-soft); }
+.sev-low { color: var(--muted); background: var(--panel-2); }
+
+.finding-meta {
+  display: flex;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 6px 17px;
+}
+
+.crumb {
+  color: var(--accent);
+}
+
+.finding-summary {
+  margin: 0 0 8px 17px;
+  color: var(--text);
+}
+
+.finding-quote {
+  margin: 0 0 0 17px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-style: italic;
+  background: var(--panel-2);
+  border-radius: 0 6px 6px 0;
+}
+
+.finding-failed {
+  margin: 8px 0 0 17px;
+  color: var(--bad);
+  font-size: 12px;
+}
+
+.finding-pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 4px;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- document pane ------------------------------------------------------ */
+
+.doc-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.doc-titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+
+.doc-title {
+  font-weight: 600;
+}
+
+.doc-source {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.doc-scroller {
+  flex: 1;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.doc-status {
+  color: #666;
+  padding: 32px;
+  font-size: 14px;
+}
+
+.doc-content {
+  background: #ffffff;
+  color: #000000;
+  padding: 28px 36px;
+}
+
+/* The filing carries its own inline styles; keep tables from overflowing. */
+.doc-content table {
+  max-width: 100%;
+}
+
+/* --- highlights (painted on the white document) ------------------------- */
+
+::highlight(finding-active) {
+  background-color: rgba(255, 196, 0, 0.55);
+  color: #000;
+}
+
+::highlight(ghost-risk-factor) {
+  background-color: rgba(239, 83, 83, 0.22);
+}
+
+::highlight(ghost-competitive) {
+  background-color: rgba(240, 179, 87, 0.28);
+}
+
+::highlight(ghost-financial-impact) {
+  background-color: rgba(80, 140, 240, 0.22);
+}
+
+::highlight(ghost-strategy) {
+  background-color: rgba(52, 199, 118, 0.24);
+}
+
+/* --- minimap ------------------------------------------------------------ */
+
+.minimap {
+  position: relative;
+  flex: 0 0 16px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(230, 232, 238, 0.14);
+  border-top: 1px solid rgba(230, 232, 238, 0.3);
+  border-bottom: 1px solid rgba(230, 232, 238, 0.3);
+  pointer-events: none;
+}
+
+.minimap-marker {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 4px;
+  border-radius: 2px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.minimap-marker.cat-risk-factor { background: var(--cat-risk-factor); }
+.minimap-marker.cat-competitive { background: var(--cat-competitive); }
+.minimap-marker.cat-financial-impact { background: var(--cat-financial-impact); }
+.minimap-marker.cat-strategy { background: var(--cat-strategy); }
+
+.minimap-marker.selected {
+  height: 7px;
+  outline: 2px solid #ffffff;
+  z-index: 2;
+}

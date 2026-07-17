@@ -143,24 +143,30 @@ chunks, so any AI-SDK-compatible chat surface renders it unmodified. See
 
 ---
 
-### 05 · Document Attribution & Highlighting
-**What the user sees.** A split view: agent findings on the left, the source
-document on the right. Clicking a finding scrolls the doc and **highlights the
-exact span** (with a colored overlay); a mini-map/scrollbar shows where all
-findings land. This is example 01 scaled up to long documents.
+### 05 · Document Attribution & Highlighting  ✅ *built — [`examples/05-document-attribution`](./examples/05-document-attribution)*
+**What the user sees.** A split view: agent findings on the left, **Chegg's
+real FY2025 Form 10-K** (pulled from SEC EDGAR, committed to the repo) on the
+right. The task: *find every statement attributing risk or decline to
+generative AI* — the canonical AI-disruption filing. Clicking a finding scrolls
+the doc and **highlights the exact span**; a minimap shows where all findings
+land (clustered in Risk Factors and MD&A — itself a credibility signal). This
+is example 01 scaled up to long documents, where navigation is the trust
+feature.
 
-**Sample input.** One long PDF (a contract, a 10-K, a research paper) + an agent
-task like *"find every clause that limits liability."*
+**Approach.** The original sketch said PDF + bounding boxes; the build
+deviates deliberately: EDGAR's native format **is HTML**, so the app renders
+the filing's own HTML and attribution reduces to deterministic **text
+anchoring**. One **Citations API** call over the full extracted text (~93K
+tokens — fits in context, no chunking/vector store) returns API-computed
+`cited_text` + char ranges; the client resolves each quote to a DOM Range with
+a whitespace-insensitive search and paints it via the **CSS Custom Highlight
+API** (no DOM mutation of the 2MB document). Unresolvable quotes are visibly
+flagged, never silently dropped. See
+[`PLAN.md`](./examples/05-document-attribution/PLAN.md).
 
-**Approach.** Attribution needs **coordinates**, so preserve spatial metadata
-through the pipeline: chunk with page + bounding-box info, keep it in the vector
-store, and have the model return chunk/sentence IDs you resolve back to
-coordinates for the highlight overlay. Fuzzy-match model quotes to rendered text
-to survive PDF.js whitespace drift.
-
-**Stack.** PDF.js (or a React PDF SDK like **Papyrus**) for rendering +
-text-layer highlighting; `react-pdf-highlighter` for the overlay UX; retrieval
-that carries bounding boxes through to the client.
+**Stack.** Same `useChat` + custom-data-parts spine as 01/03/04, replaying a
+recorded run (the grounded call happens once, offline). The PDF/bounding-box
+pipeline remains the variant for natively paginated sources (contracts, scans).
 
 ---
 

@@ -1,0 +1,254 @@
+{
+  "generatedWith": "claude-opus-4-8",
+  "generatedAt": "2026-07-17T01:47:47.552Z",
+  "document": "Chegg, Inc. Form 10-K FY2025 (EDGAR 0001364954-26-000021)",
+  "task": "Find every statement in this 10-K where Chegg attributes business risk, competitive pressure, revenue/subscriber decline, or strategic change to generative AI, AI technologies, LLMs, or AI-powered competitors (e.g. ChatGPT). Cover Risk Factors, Business, and MD&A. One finding per distinct statement or theme; aim for 10-15 findings ordered as they appear in the document.",
+  "findings": [
+    {
+      "id": "f1",
+      "title": "AI innovation failure threatens competitive position",
+      "category": "risk-factor",
+      "severity": "high",
+      "summary": "If Chegg fails to innovate and offer new products and services in response to rapidly evolving technological and market developments, including AI, its competitive position and business prospects may be harmed.",
+      "quotes": [
+        {
+          "text": "•If we fail to innovate and offer new products and services in response to rapidly evolving technological and market developments, including AI, our competitive position and business prospects may be harmed.\n\n",
+          "charStart": 10629,
+          "charEnd": 10838,
+          "section": "Front matter"
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "title": "Uncertainty over AI's impact on study habits",
+      "category": "risk-factor",
+      "severity": "high",
+      "summary": "The uncertainty surrounding the evolving educational landscape, including the impact of AI on learning and education, the state of the student including the extent to which AI will impact study habits and how students learn and/or complete their assignments, and the demand for evolving offerings make it difficult to predict operational trends and results of operations.",
+      "quotes": [
+        {
+          "text": "•The uncertainty surrounding the evolving educational landscape, including the impact of AI on learning and education, the state of the student including the amount and the extent to which AI will impact study habits and how students learn and/or complete their assignments, and the demand for our evolving offerings make it difficult to predict our operational trends and results of operations.\n\n",
+          "charStart": 11111,
+          "charEnd": 11508,
+          "section": "Front matter"
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "title": "Workforce cut tied to generative AI adoption",
+      "category": "strategy",
+      "severity": "high",
+      "summary": "In May 2025 and October 2025, Chegg announced restructuring plans that included reductions of its global workforce of approximately 640 employees, or approximately 56% of its then-current workforce, to better align its cost structure with recent industry challenges negatively impacting the business, including increased competition and student adoption of generative AI products.",
+      "quotes": [
+        {
+          "text": "In May 2025 and October 2025, we announced restructuring plans that included reductions of our global workforce of approximately 640 employees, or approximately 56% of our then-current workforce, to better align our cost structure with recent industry challenges that are negatively impacting our business, including increased competition and student adoption of generative AI products.\n\n",
+          "charStart": 42680,
+          "charEnd": 43068,
+          "section": "Item 1 · Business"
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "title": "AI tools provide faster answers, disrupting business",
+      "category": "risk-factor",
+      "severity": "high",
+      "summary": "New technologies, including those based on AI, can provide students with more immediate responses than traditional tools. These new technologies have resulted in headwinds to Chegg's business, and over time, the accuracy of these tools and their ability to handle complex questions is expected to improve, which would further disrupt the business.",
+      "quotes": [
+        {
+          "text": "New technologies, including those based on AI, can provide students with more immediate responses than traditional tools. These new technologies have resulted in headwinds to our business, and over time, the accuracy of these tools and their ability to handle complex questions is expected to improve, which would further disrupt our business. ",
+          "charStart": 52687,
+          "charEnd": 53031,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "title": "AI investments failed to attract expected students",
+      "category": "financial-impact",
+      "severity": "high",
+      "summary": "Chegg's updated user experience and investments in AI have not attracted as many new students as anticipated to its platform and its business has been adversely affected.",
+      "quotes": [
+        {
+          "text": "Our updated user experience and investments in AI have not attracted as many new students as anticipated to our platform and our business has been adversely affected. ",
+          "charStart": 53665,
+          "charEnd": 53832,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "title": "Broad AI companies compete in education",
+      "category": "competitive",
+      "severity": "high",
+      "summary": "Chegg's competitors that are not specifically focused on education and learning services but whose AI offerings may impact education and learning include companies such as Google, OpenAI, Microsoft, Meta, and Anthropic.",
+      "quotes": [
+        {
+          "text": "Our competitors that are not specifically focused on education and learning services but whose AI offerings may impact education and learning include companies such as Google, OpenAI, Microsoft, Meta, and Anthropic. ",
+          "charStart": 57380,
+          "charEnd": 57596,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f7",
+      "title": "Google AI Overviews reducing website traffic",
+      "category": "competitive",
+      "severity": "high",
+      "summary": "Google's roll out of Artificial Intelligence Overview (AIO) has created and is expected to continue to create headwinds, most notably reductions in traffic to Chegg's website and customers subscribing to its services. In August 2024, Google began to significantly expand its AIO search experience, which displays AI-generated content at the top of its search results, keeping users on Google search results versus leading them onto Chegg's site.",
+      "quotes": [
+        {
+          "text": "In particular, Google's roll out of Artificial Intelligence Overview (AIO) has created and is expected to continue to create headwinds for our industry and our business, most notably reductions in traffic to our website and customers subscribing to our services. In August 2024, Google began to significantly expand its AIO search experience, which displays AI-generated content at the top of its search results. This experience, which includes questions and solutions for education, keeps users on Google search results versus leading them onto our site. ",
+          "charStart": 57596,
+          "charEnd": 58152,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f8",
+      "title": "Antitrust suit filed against Google over AIO",
+      "category": "strategy",
+      "severity": "medium",
+      "summary": "On February 24, 2025, Chegg filed a complaint in the U.S. District Court for the District of Columbia against Google LLC and Alphabet Inc., asserting federal antitrust claims and common-law unjust enrichment claims in connection with Google's expansion of its AIO search experience.",
+      "quotes": [
+        {
+          "text": "As described in more detail in Part I, Item 3, \"Legal Proceedings\" of this Annual Report on Form 10-K, on February 24, 2025, we filed a complaint in the U.S. District Court for the District of Columbia against Google LLC and Alphabet Inc. (\"Google\"), asserting federal antitrust claims and common-law unjust enrichment claims, in connection with Google's expansion of its AIO search experience (\"Google suit\"). ",
+          "charStart": 58404,
+          "charEnd": 58815,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f9",
+      "title": "Licensed content may train competing AI models",
+      "category": "risk-factor",
+      "severity": "medium",
+      "summary": "Chegg has licensed certain of its content to other entities who may use this content to train AI models that may compete with Chegg's products in the market.",
+      "quotes": [
+        {
+          "text": "In addition, we have licensed certain of our content to other entities who may use this content to train AI models that may compete with our products in the market.\n\n",
+          "charStart": 59417,
+          "charEnd": 59583,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f10",
+      "title": "AI lowers barriers for new competitors",
+      "category": "competitive",
+      "severity": "medium",
+      "summary": "AI technologies may significantly facilitate the entry of new competitors into the industry, and competition may develop products similar or superior to Chegg's technologies or more cost-effective to develop and deploy. Other parties may also have or obtain patents that would prevent, limit, or interfere with Chegg's ability to make, use, or sell its own AI products.",
+      "quotes": [
+        {
+          "text": "AI technologies may also significantly facilitate the entry of new competitors into our industry. Our competition may develop products and technologies that are similar or superior to our technologies or are more cost-effective to develop and deploy. Given the long history of development in the AI sector, other parties may have (or in the future may obtain) patents or other proprietary rights that would prevent, limit, or interfere with our ability to make, use, or sell our own AI products. ",
+          "charStart": 59720,
+          "charEnd": 60216,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f11",
+      "title": "Students turning to ChatGPT over Chegg",
+      "category": "competitive",
+      "severity": "high",
+      "summary": "There has been a continued increase in adoption of free and paid generative AI products for academic support, with students increasingly turning to generative AI for homework and exams; students see products like ChatGPT as strong alternatives to vertically specialized education solutions such as Chegg, negatively impacting overall traffic and accelerating the decline in new subscribers.",
+      "quotes": [
+        {
+          "text": "Across our industry, there has been a continued increase in the adoption of free and paid generative AI products for academic support, and students are increasingly turning to generative AI for academic support, such as homework and exams, as well as assistance in other areas of daily life. This shift in student behavior impacts education technology companies broadly, where students see generative AI products like ChatGPT and others as strong alternatives to vertically specialized solutions for education such as Chegg. These developments have negatively impacted our industry and our business and may continue to impact our overall traffic and accelerate the decline in the number of new subscribers that sign up for our services.\n\n",
+          "charStart": 60564,
+          "charEnd": 61302,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f12",
+      "title": "Search ranking declines and traffic loss",
+      "category": "financial-impact",
+      "severity": "high",
+      "summary": "Chegg's website has experienced recent declines in search result rankings, which it anticipates will persist; global non-subscriber traffic to Chegg declined year-over-year, and a continued decline would materially adversely affect its business, operating results and financial condition.",
+      "quotes": [
+        {
+          "text": "Our website has experienced recent declines in search result rankings, and we anticipate that these declines will persist in the future. Global non-subscriber traffic to Chegg declined year-over-year and a continued decline in traffic to our site would materially adversely affect our business, operating results and financial condition.\n\n",
+          "charStart": 69422,
+          "charEnd": 69761,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f13",
+      "title": "AI facilitates piracy and content infringement",
+      "category": "risk-factor",
+      "severity": "medium",
+      "summary": "The advancement of AI may increase risks associated with misuse of content, including AI applications that facilitate piracy and new forms of intellectual property infringement through unauthorized reproduction of copyrighted content to train AI applications and create unauthorized derivative works.",
+      "quotes": [
+        {
+          "text": "Also, despite the potential benefits of AI technology, the advancement of AI may increase certain risks and adverse impacts associated with misuse of our content, including the development of AI applications that may facilitate piracy and new forms of intellectual property infringement through the unauthorized reproduction of copyrighted content to “train” AI applications and to create unauthorized derivative works.\n\n",
+          "charStart": 116690,
+          "charEnd": 117111,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f14",
+      "title": "AI regulation may restrict Chegg's operations",
+      "category": "risk-factor",
+      "severity": "medium",
+      "summary": "Privacy and AI obligations may make it harder to conduct business using AI/ML, lead to regulatory fines or penalties, require changes to business practices, or prevent or limit use of AI/ML; if Chegg cannot use AI/ML or its use is restricted, its business may be less efficient or it may be at a competitive disadvantage.",
+      "quotes": [
+        {
+          "text": "These obligations may make it harder for us to conduct our business using AI/ML, lead to regulatory fines or penalties, require us to change our business practices, retrain our AI/ML, or prevent or limit our use of AI/ML. ",
+          "charStart": 148827,
+          "charEnd": 149049,
+          "section": "Item 1A · Risk Factors"
+        },
+        {
+          "text": "If we cannot use AI/ML or that use is restricted, our business may be less efficient, or we may be at a competitive disadvantage.\n\n",
+          "charStart": 149273,
+          "charEnd": 149404,
+          "section": "Item 1A · Risk Factors"
+        }
+      ]
+    },
+    {
+      "id": "f15",
+      "title": "Pivot to skilling-focused B2B strategy",
+      "category": "strategy",
+      "severity": "medium",
+      "summary": "On October 27, 2025, Chegg's Board approved concluding its review of strategic alternatives in support of evolving the business into a skilling-focused business-to-business organization, building on existing relationships in professional language learning, workplace readiness and AI-related skills courses.",
+      "quotes": [
+        {
+          "text": "On October 27, 2025, we announced that our Board unanimously approved the conclusion of its review of strategic alternatives in support of the evolution of our business, including into a skilling-focused business-to-business organization, building on existing relationships with businesses in professional language learning, workplace readiness and AI-related skills courses. ",
+          "charStart": 193688,
+          "charEnd": 194064,
+          "section": "Item 7 · MD&A"
+        }
+      ]
+    },
+    {
+      "id": "f16",
+      "title": "Generative AI expected to accelerate subscriber decline",
+      "category": "financial-impact",
+      "severity": "high",
+      "summary": "In MD&A, Chegg states these developments have negatively impacted its industry and business and are expected to continue to impact overall traffic and accelerate the decline in the number of new subscribers, resulting in continued negative impacts to growth, business, operating results and financial condition.",
+      "quotes": [
+        {
+          "text": "These developments have negatively impacted our industry and our business and are expected to continue to impact our overall traffic and accelerate the decline in the number of new subscribers that sign up for our services, resulting in continued negative impacts to our growth, business, operating results and financial condition. ",
+          "charStart": 195624,
+          "charEnd": 195956,
+          "section": "Item 7 · MD&A"
+        }
+      ]
+    }
+  ]
+}
