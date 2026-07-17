@@ -1,13 +1,13 @@
-import type { Checkpoint, Decision, LeaseUIMessage, Phase, Policy } from "./types";
+import type { Checkpoint, Decision, DoneData, Phase, Policy, ReviewUIMessage } from "./types";
 
-type Part = LeaseUIMessage["parts"][number];
+type Part = ReviewUIMessage["parts"][number];
 
 export interface LedgerState {
   decisions: Decision[]; // in first-seen order
   phases: Phase[];
   policies: Policy[];
   checkpoints: Checkpoint[]; // in arrival order
-  done: { summary: string; stats: string } | null;
+  done: DoneData | null;
 }
 
 /**

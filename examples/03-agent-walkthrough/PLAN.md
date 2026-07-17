@@ -1,374 +1,282 @@
-# Example 03 (planning) — Working in the Open
+# Example 03 (v2 spec) — Working in the Open: Clinical Chart Review
 
-> **Status: plan, not built.** This doc frames the problem, lays out scenario and
-> UX options, recommends an approach, and defines the build. Nothing here is code
-> yet — it's the thing to agree on before writing any.
+> **Status: v2 built** (mock + live agent, verified end-to-end on all three
+> dial settings). This spec replaced v1 (a 30-lease exit analysis), keeping the
+> streaming/HITL architecture. The v1 design history and the two architecture
+> decisions (no LangGraph; LangSmith tracing) are in git history — the
+> decisions themselves carry forward unchanged, summarized at the bottom.
+> Build deltas vs. this spec: options carry their consequences
+> (`CheckpointOption.decided/policyRule/dependentPatches`) instead of a
+> separate consequence enum; the live agent gained a structural block-level
+> *ceiling* for routine checks (mirror of the safety floor) after live testing
+> showed the model over-blocking agenda items; `lib/resolve.ts` was factored
+> out so mock and live apply outcomes through one code path.
 
-## Reframing this example
+## Why respec
 
-The top-level [README](../../README.md) sketched 03 as *"Agent Walkthrough —
-trajectory replay,"* i.e. scrub back through a finished run. That's too passive for
-what matters. The sharper goal:
+What v1 got right: the machinery. Pause/resume checkpoints, a decision ledger
+folded from typed stream parts, a shared confidence gate across mock and live
+modes, a durable server-authoritative thread. None of that changes.
 
-> When an agent makes **many implicit decisions** across a **lengthy analysis of a
-> large corpus**, it must reveal those decisions **incrementally and live** — get
-> the consequential ones validated as it goes, so trust is built along the way and
-> the human never faces a 30-minute wall of unaudited conclusions.
+What v1 got wrong: **legibility**. The demo is a wall of 59 ledger rows over 30
+leases the viewer has no relationship with. Evidence is a one-line metadata
+string, not a document. The user is asked to adjudicate "#12's operative
+amendment" without ever seeing the documents. Six-plus interruptions and two
+phase gates make it long, and the volume actively obscures the one idea that
+matters:
 
-So 03 becomes **live, incremental decision surfacing with checkpoints** — and it
-pulls the human-in-the-loop idea forward from example 06. (06 stays: it's about
-approving an *external action*. 03 is about validating *analytical decisions*
-mid-flight. Same machinery, different object.)
+> **Working in the open = the agent pairs a verbatim source excerpt with a
+> recommendation and its rationale, and asks: do you agree?**
 
-## The problem, precisely
+v2 optimizes for that transaction. Fewer decisions, each one rich: real
+document excerpts you can read in five seconds, a plainly stated
+recommendation, an explicit consequence on each button, and a visible payoff
+when decisions build on each other.
 
-An agent working over a big corpus doesn't make one decision — it makes hundreds
-of small, mostly-invisible ones. Four things go wrong if they all surface only at
-the end:
+## The new scenario
 
-1. **Deferred validation.** A wall of findings arrives at once. The user must
-   validate all of it, cold, against a corpus they haven't held in their head.
-2. **Implicit decisions are invisible.** The output shows conclusions, not the
-   judgment calls behind them ("I read this clause as calendar months," "I treated
-   these 12 docs as superseded"). The user can't validate what they can't see.
-3. **Errors compound.** A wrong call at decision 3 silently poisons decisions
-   4–300. Catching it at the end means redoing the downstream work.
-4. **Trust can't calibrate.** With no incremental track record, the user has no
-   basis to decide how much to trust the whole — so they either rubber-stamp
-   (dangerous) or re-check everything (defeats the point).
+**Pre-visit clinical chart review.** A primary-care physician has a
+post-discharge follow-up visit tomorrow. The agent reviews the patient's chart
+tonight and prepares a visit brief — flagging only what needs the doctor's
+judgment, logging every routine check as an auditable receipt.
 
-### The productivity paradox
+Why this domain wins:
 
-The naive fix — "ask the user to approve everything" — is just as bad. Interrupt
-on every trivial decision and you've rebuilt the manual process with extra steps.
+- **A chart is a genuinely heterogeneous small corpus** — discharge summary,
+  med list, labs, consult note, intake form — where the interesting findings
+  live *between* documents, not inside one. Cross-document conflict is the
+  natural state of medical records.
+- **The stakes are instantly legible.** Nobody needs training to understand
+  "the med list and the discharge summary disagree about what she's taking."
+- **The doctor is the perfect reviewer persona.** The agent recommends, the
+  physician decides — the authority boundary is real, familiar, and it's
+  exactly the trust relationship this repo is about.
+- **Safety-critical records give an honest "won't guess" blocker** (the
+  allergy conflict) without contrivance like v1's illegible scan.
 
-> **The real design goal: make the user's validation effort grow *sublinearly*
-> with the corpus.** A 30-lease analysis and a 300-lease analysis should cost the
-> user roughly the same number of decisions to trust.
+Everything is synthetic. The patient, clinicians, and documents are invented;
+a demo disclaimer ships in the UI footer and README.
 
-Everything below is in service of that one goal. Four levers get us there:
+## The patient chart (the corpus)
 
-- **Confidence-gating** — only *uncertain or high-impact* decisions interrupt.
-- **Policy promotion** — one correction resolves a whole *class* of decisions.
-- **Phase gates** — catch compounding errors at boundaries, before they spread.
-- **Auditable receipts** — the auto-decisions are logged and spot-checkable, so
-  "trust" doesn't mean "review," it means "sample and move on."
+**Eleanor Vance, 68.** Type 2 diabetes, hypertension, CKD stage 3b. Discharged
+12 days ago after community-acquired pneumonia complicated by acute kidney
+injury. Follow-up visit tomorrow.
 
-## Design principles
+Seven documents, each with **full (short) document text** — 10–25 lines of
+realistic content, not metadata one-liners. Every evidence snippet in the demo
+is a verbatim span from one of these, and clicking any citation opens the full
+document with the span highlighted.
 
-1. **Surface decisions, not just answers.** The unit of the UI is a *decision*
-   (what was decided, why, on what evidence, how confidently) — not a finding.
-2. **Confidence gates the interruption.** The agent self-scores each decision.
-   High-confidence → silent receipt. Low-confidence / high-impact → blocking
-   checkpoint. Nothing else stops the user.
-3. **Steer, don't just approve.** A checkpoint offers Approve / Correct / Set a
-   policy — not a yes/no. Correction feeds back into the run.
-4. **One fix, one class.** When a correction generalizes ("business days, not
-   calendar"), promote it to a standing policy the agent applies to every matching
-   decision, retroactively and going forward. This is what makes validation
-   sublinear.
-5. **Gate the phases.** The agent works in phases; each boundary is a natural
-   batch-approval point that stops a bad assumption from compounding.
-6. **Keep a navigable ledger.** Every decision — auto or checkpointed — lands in a
-   running, filterable log with status and a jump-to-evidence link.
-7. **Expose the trust dial.** The user sets how aggressively the agent interrupts
-   (from "only blockers" to "narrate everything"), and can move it mid-run as
-   trust grows or a section gets risky.
+| Doc | Title | Date | The load-bearing content |
+|-----|-------|------|--------------------------|
+| `discharge` | Hospital discharge summary | 12 days ago | CAP + AKI on CKD. **Lisinopril held, NOT restarted** — "resume pending renal recovery, re-evaluate at PCP follow-up." **Metformin resumed at 1000 mg BID.** Completed course: amoxicillin-clavulanate ×7 days. |
+| `medlist` | Active medication list (EHR) | 3 months ago | **Still shows lisinopril 20 mg daily** and metformin 1000 mg BID; also amlodipine 5 mg, atorvastatin 40 mg, aspirin 81 mg. Stale — predates the admission. |
+| `labs` | Basic metabolic panel + trend | 5 days ago | Creatinine 1.7, **eGFR 38** — trend 52 → 47 → 38 over 6 months. K 4.8. (HbA1c 8.1%, 3 months ago, shown in trend block.) |
+| `cards` | Cardiology consult note | 4 months ago | "Continue ACE inhibitor for cardio-renal protection; consider SGLT2i at next review." — sets up the lisinopril tension for the brief. |
+| `intake` | Patient intake form (patient-completed) | 6 days ago | **Allergies: "penicillin — rash as a child."** Also reports dizziness on standing since discharge. |
+| `pcpnote` | Prior PCP visit note | 3 months ago | **Allergies: NKDA.** BP 138/84. "Recheck BMP in 3 months." |
+| `imaging` | Chest X-ray report (discharge) | 13 days ago | "Improving right lower lobe consolidation; no follow-up imaging required." — pure receipt material. |
 
-## Scenario options
+Implementation: `lib/chart.ts` replaces `lib/corpus.ts`. Each doc is
+`{ id, title, date, body }` where `body` contains highlight markers
+(`⟦hl:lisinopril-held⟧…⟦/hl⟧`) that the document panel resolves; evidence
+references are `{ docId, spanId }` so a snippet is *always* extracted from the
+real document text — the spec's one hard rule: **no snippet that isn't in a
+document.**
 
-We need a domain with: a genuinely large corpus, many *implicit and consequential*
-decisions, decisions that **compound**, real ambiguity (so confidence varies), and
-enough legibility that a demo audience gets it without domain training.
+## The run: 3 decisions that build on each other
 
-### Option A — Lease-portfolio exit analysis  ★ recommended
-*"We may shrink our footprint. Across our 30-property lease portfolio, which
-leases can we exit in the next 18 months, by when, and at what cost?"*
+One pass through the chart. ~14 routine receipts stream into the ledger
+(examples: "Chest X-ray — no follow-up imaging required ✓", "BP controlled on
+amlodipine, last 3 readings <140/90 ✓", "Statin/aspirin unchanged ✓",
+"HbA1c 8.1% — added to visit agenda"). Three checkpoints interrupt. Then the
+brief.
 
-The agent reads 30 leases (+ amendments) and, per property, decides: which
-document is operative, whether an exit mechanism exists, how to read the notice
-requirement, the earliest exit date, and the penalty.
+### Decision 1 — The med list and the discharge summary disagree
+*(kind: scope / source-of-truth · confidence 0.85 · impact high · blocks on balanced+)*
 
-- **Corpus:** 30 properties × (lease + 0–2 amendments), short synthetic docs.
-- **Implicit decisions with texture:**
-  - *Scoping:* #12 has an original + two amendments — which rent/term is operative?
-  - *Interpretation (compounds!):* #7 says "six months' notice" — calendar or
-    business months? The **same landlord's wording appears in 8 leases**, so one
-    policy call resolves 8 at once.
-  - *Assumption:* #3's governing law is blank → assume the property's state.
-  - *Extraction (low-confidence → blocker):* #19's penalty depends on a rent figure
-    that's illegible in the scan.
-  - *Classification (low-confidence → blocker):* is #22's "surrender for
-    convenience with landlord consent" a real exit option or not?
-- **Why it wins:** richest mix of decision *types*, a vivid compounding case, a
-  natural policy-promotion moment, and legible stakes. The user validates ~6
-  decisions to trust a 30-lease analysis.
+**Evidence (two excerpts, side by side):**
+> **Active medication list** · updated 3 months ago
+> "Lisinopril 20 mg PO daily — active"
 
-### Option B — Transaction / expense-policy audit
-*"Review this quarter's 4,000 expense line items and flag policy violations."*
+> **Discharge summary** · 12 days ago
+> "Lisinopril HELD during admission for AKI. Not restarted at discharge —
+> resume pending renal recovery, re-evaluate at PCP follow-up."
 
-- **Corpus:** thousands of transactions — big, so the sublinear-validation story is
-  the most dramatic.
-- **Decisions:** interpreting an ambiguous policy, materiality thresholds,
-  category judgment, duplicate detection.
-- **Why consider it:** best for demonstrating *scale* and *policy promotion* (one
-  ruling on "are team lunches over $N a violation?" clears hundreds). Weaker on
-  compounding and on decision *variety* — the calls are more repetitive.
+**Recommendation:** Treat the discharge summary as the current record —
+Eleanor is *not* taking lisinopril today. **Rationale:** it's 3 months newer
+and explicitly documents the change; the med list predates the admission.
 
-### Option C — Data-room / M&A due-diligence memo
-*"Read the target's data room and draft the diligence findings."*
+**Buttons:** `Agree — treat discharge summary as current` (lean) ·
+`Disagree — keep the med list as the record`
 
-- **Corpus:** hundreds of heterogeneous docs.
-- **Decisions:** which figures are authoritative, normalizing across periods,
-  materiality, related-party flags.
-- **Why consider it:** highest stakes and most "enterprise." But less legible to a
-  general audience and the decisions are harder to make crisp in a demo.
+**The build-up payoff:** agreeing promotes a reconciliation rule — *"where
+the med list and discharge summary conflict, the discharge summary governs"* —
+and the agent immediately applies it to the two remaining discrepancies
+**as receipts, live**: metformin resumed at 1000 mg BID (per discharge), and
+amoxicillin-clavulanate marked *completed course, not an active med*. Policy
+banner: **"1 decision → 3 records reconciled."** Sublinear validation, scaled
+honestly.
 
-**Recommendation: Option A**, with the transaction-audit (B) *style* of
-policy-promotion baked in via the 8-leases-one-landlord mechanic. If you'd rather
-foreground raw scale over decision variety, switch to B.
+### Decision 2 — Metformin dose vs. declining kidney function
+*(kind: interpretation / clinical flag · confidence 0.7 · impact high · blocks on balanced+ · **depends on Decision 1**)*
 
-## Taxonomy of implicit decisions (what the UI must handle)
+**Evidence (two excerpts):**
+> **BMP + trend** · 5 days ago
+> "eGFR 38 mL/min/1.73m² (six-month trend: 52 → 47 → 38)"
 
-The checkpoint/receipt card is the same component across all of these; only the
-content differs. Naming them makes the agent's `kind` field and the UI filters:
+> **Discharge summary** · 12 days ago
+> "Metformin resumed at 1000 mg twice daily."
 
-| Kind | Example | Typical confidence |
-|------|---------|--------------------|
-| **Scope** | which doc is operative; which items are in-corpus | usually high, occasionally a blocker |
-| **Interpretation** | "six months" = calendar vs business | medium — prime policy-promotion candidate |
-| **Assumption** | governing law not stated → assume state | medium |
-| **Extraction** | pull the current rent from a messy scan | varies; low when source is degraded |
-| **Classification** | is this a real exit option? severity? | varies |
-| **Prioritization** | what's material enough to surface first | high, but worth a receipt |
+**Recommendation:** Flag as the top agenda item for tomorrow — at eGFR 30–45,
+guidance is to reassess and typically halve metformin (max ~1000 mg/day); she
+resumed at double that, and the trend is downward. **Rationale is explicit
+about the chain:** *"You confirmed the discharge summary is current (Decision 1),
+so she's taking 1000 mg BID against an eGFR of 38."* The card shows the chain:
+`Decision 1 ✓ → eGFR 38 → dose exceeds guidance`.
 
-## UX pattern options
+**Buttons:** `Agree — put dose reduction on the visit agenda` (lean) ·
+`Disagree — dose is acceptable, log and move on`
 
-Five building blocks. The recommendation is a specific *combination*, not one.
+Note what the agent does *not* do: prescribe. It flags for the physician's
+judgment. The recommendation is about the *agenda*, not the dose — that's the
+authority boundary, stated on the card.
 
-1. **Blocking checkpoints ("stop-and-ask").** Agent halts, user must respond.
-   Max trust, min throughput. Right for the *few* pivotal decisions — wrong as the
-   default.
-2. **Non-blocking receipts ("narrated decisions").** Agent keeps working and
-   streams a live ledger; the user watches and *may* intervene. Preserves
-   throughput; steer by exception. Right for the *many* routine decisions.
-3. **Confidence-gated hybrid.** The agent's confidence picks 1 vs 2 per decision.
-   This is the core mechanism — it's what makes "surface the right decisions"
-   automatic rather than a guess.
-4. **Phase gates.** Batch-approve at phase boundaries (triage → deep-read →
-   synthesis). Fewer, well-timed interruptions; stops compounding at the seams.
-5. **Policy learning.** A correction can be promoted to a standing rule applied to
-   the whole matching class, retroactively. The sublinear-validation engine.
+### Decision 3 — Conflicting allergy records (the agent won't guess)
+*(kind: safety verification · confidence — refuses to score · **always blocks**, every dial setting)*
 
-**Recommended combination:** **3 + 4 + 5.** Confidence-gating decides what
-interrupts *within* a phase; phase gates provide the structured batch-approvals
-*between* phases; policy promotion makes each correction pay for itself many times
-over. Non-blocking receipts (2) are the default rendering for everything that
-doesn't trip a gate; blocking checkpoints (1) are what a tripped gate produces.
+**Evidence (three excerpts):**
+> **Intake form (patient-completed)** · 6 days ago
+> "Allergies: penicillin — rash as a child"
 
-### The trust dial
+> **Prior PCP note** · 3 months ago
+> "Allergies: NKDA (no known drug allergies)"
 
-A single control that sets the confidence threshold for interrupting:
+> **Discharge summary** · 12 days ago
+> "Completed: amoxicillin-clavulanate 875/125 mg BID × 7 days"
 
-```
- only blockers ─────●──────────── narrate everything
- (high autonomy)                  (high oversight)
-```
+**The agent's position:** "These can't all be right — and she just completed a
+penicillin-class antibiotic with no documented reaction. I won't adjudicate an
+allergy record. How do you want to handle it?"
 
-Start conservative (more oversight) and let the user relax it as the agent earns
-trust within the run — or tighten it when entering a riskier section. This makes
-the trust/productivity trade *the user's dial to turn*, which is the whole thesis.
+**Buttons:** `Verify with patient at tomorrow's visit — flag chart until then`
+(lean) · `Update record: penicillin allergy` · `Keep NKDA`
 
-## The interaction, walked through (Option A)
+This is v1's "illegible figure" beat done honestly: the blocker exists because
+the *stakes* forbid guessing, not because the data is unreadable.
 
-1. **Kickoff.** User submits the task and picks a trust-dial setting. Agent states
-   its plan: *"3 phases: triage 30 leases → deep-read the exitable ones →
-   synthesize a ranked exit plan."*
-2. **Phase 1 — Triage (mostly receipts).** Decisions stream into the ledger:
-   *"#1 operative doc = 2021 lease (conf 0.96) ✓ auto,"* … For #12 the operative-doc
-   call is ambiguous *and* high-impact (everything downstream depends on it) → it
-   **blocks**: a checkpoint card with the three candidate docs and the agent's
-   lean. User approves. Two more low-confidence triage items block; the rest auto.
-3. **Phase gate 1.** *"27 leases have an exit mechanism, 3 don't. Deep-read the
-   27?"* One batched confirmation. Compounding stops here: nothing proceeds on a
-   bad triage.
-4. **Phase 2 — Deep read (the policy moment).** On #7 the agent flags *"'six
-   months' notice' — I read this as calendar months (conf 0.55)."* User corrects to
-   **business** and clicks **"apply to all leases with this wording."** The ledger
-   shows **8 decisions updated at once**; validation just went sublinear. The
-   illegible-rent extraction on #19 blocks; user supplies the figure.
-5. **Phase gate 2.** Agent shows the exit table (date + cost per lease) for a batch
-   glance before synthesis.
-6. **Phase 3 — Synthesis.** Prioritization decisions surface as receipts; final
-   ranked plan renders. Every number links back to the decision and the source
-   span behind it.
-7. **The payoff.** The user made ~6 real decisions, resolved a class of 8 with one
-   click, and watched a track record accrue — instead of validating 30 leases cold.
+### The finish — visit brief (single gate)
 
-## Tech approach
+No intermediate phase gates. One closing checkpoint renders the deliverable:
+a ranked **visit brief** where every line links back to its decision and its
+source spans:
 
-### Stack continuity
-Same spine as 01/02: **Next.js + Vercel AI SDK + Anthropic**. This example uses the
-**third streaming shape**: a `useChat` **UI message stream** carrying (a) narration
-text, (b) typed `data-decision` receipt parts, (c) `data-phase` / `data-policy`
-parts, and (d) **human-in-the-loop tool calls** for blocking checkpoints.
+1. **Metformin 1000 mg BID vs eGFR 38** — consider dose reduction *(Decision 2)*
+2. **Lisinopril restart decision** — held since admission; cardiology
+   recommends continuing an ACEi *(Decision 1 + cardiology consult — a tension
+   the agent surfaces but explicitly leaves to the doctor)*
+3. **Allergy verification** — intake vs chart conflict *(Decision 3)*
+4. Orthostatic dizziness reported since discharge — check standing BP *(receipt)*
+5. HbA1c 8.1% — diabetes management review *(receipt)*
 
-### Checkpoints = tool calls that need approval
-The idiomatic AI SDK v5 path for blocking is a tool with approval. The agent calls
-`propose_checkpoint({...decision})`; low-confidence/high-impact decisions set
-`needsApproval`, which pauses the stream and renders the checkpoint card. The
-user's Approve/Correct/Set-policy response becomes the tool result; the run
-resumes. High-confidence decisions call a non-approving `record_decision` tool →
-they just append to the ledger. Confidence-gating is literally "does this tool call
-need approval."
+Closing stats line: **"3 decisions needed you · 14 checks logged · every line
+cites its source."** That's the thesis in one sentence.
 
-### State & resume
-The decision ledger, active phase, corpus cursor, and adopted policies are the
-run's state. In the built mock this is split deliberately: the **server holds only
-the resume position** (an in-memory `SESSIONS` map of `{cursor, dial}` keyed by
-thread id), and the **client holds the whole ledger**, reconstructed on every
-render by folding the streamed `data-*` parts (`lib/ledger.ts`). The "interrupt" is
-not a suspended process — it's the player `return`-ing out of its loop at a blocking
-checkpoint, with the cursor saved; a resolution is a fresh POST that re-enters and
-resumes from the cursor. See **Live agent implementation — core decisions** below
-for how this maps to the live build (and why it is *not* LangGraph).
+## Trust dial (kept, simplified role)
 
-### Mock-first choreography (primary artifact)
-As with 01/02, the **no-key mock is first-class** — and here it's the *main* way we
-control the demo, because we want to choreograph the exact trust beats (the #12
-blocker, the #7 policy moment, the phase gates). The mock is a scripted analysis
-that emits the same part/tool stream a live agent would, at a realistic cadence,
-and honors the user's checkpoint responses (approve → continue; correct+promote →
-rewrite the 8 dependent ledger entries live). A live mode runs a real agent loop
-over the small corpus for authenticity.
+Same three positions, same shared `lib/gate.ts`:
 
-### Components (new reusable primitives)
-- `DecisionLedger` — the running, filterable log (by kind / status / confidence).
-- `DecisionReceipt` — one non-blocking decision row (kind, one-liner, confidence,
-  jump-to-evidence).
-- `CheckpointCard` — the blocking card: decision + evidence + Approve / Correct /
-  **Set policy**.
-- `PhaseTimeline` — phases with progress and the batch gate.
-- `PolicyBanner` — "1 correction → 8 decisions updated," the sublinear moment made
-  visible.
-- `TrustDial` — the autonomy/oversight control.
-- `ConfidenceBadge` — shared with the receipts and cards.
+- **Oversight** — one extra medium-confidence item asks first (the orthostatic
+  dizziness receipt becomes a checkpoint: "add standing BP to agenda?").
+- **Balanced** (default) — the 3 decisions above.
+- **Autonomy** — Decisions 1–2 auto-resolve on the agent's lean (amber
+  `auto-resolved` rows for audit); **Decision 3 still blocks** — the dial
+  never buys autonomy over a safety record. That asymmetry is worth a line in
+  the README: some decisions are gated by confidence, some by category.
 
-### Data model (sketch)
+Restarting on a different dial remains the "what to try" step that proves the
+gate is real.
+
+## UI changes (where the quality boost lands)
+
+1. **CheckpointCard v2 — evidence-first.** The card leads with 1–3 document
+   excerpts rendered as document chrome (doc title, date, quoted text with the
+   key span highlighted), then a clearly separated **Recommendation** block,
+   then the rationale, then buttons. Every button label states its
+   consequence — never bare "Approve." For Decision 2, a small dependency
+   line shows the chain from Decision 1.
+2. **DocumentPanel (new).** Clicking any citation — on a card, a receipt, or
+   a brief line — opens the full source document in a side panel, scrolled to
+   the highlighted span. This is "clearly citing a source" made literal, and
+   it works because the corpus is now real document text.
+3. **Ledger, humanized.** ~18 rows total (14 receipts + the decisions), each a
+   plain-English sentence with a source chip. Filters stay ("Needed you" is
+   still the payoff filter). Kind taxonomy shrinks to what this scenario uses:
+   `record-conflict · clinical-flag · safety · routine-check`.
+4. **Sidebar.** Trust dial + a small patient header card + the policy banner.
+   The phase timeline collapses to a 3-step progress label (Reconcile meds →
+   Review results → Brief) with no blocking gates until the brief.
+
+## Data-model deltas (`lib/types.ts`)
+
 ```ts
-type DecisionKind = "scope" | "interpretation" | "assumption"
-                  | "extraction" | "classification" | "prioritization";
-interface Decision {
-  id: string; phase: number; kind: DecisionKind;
-  subject: string;              // "Lease #7 — notice period"
-  decided: string;              // "read as calendar months"
-  rationale: string; evidenceRef: string;  // → source span
-  confidence: number;           // 0..1, gates blocking
-  impact: "low" | "med" | "high";
-  status: "auto" | "pending" | "approved" | "corrected" | "policy-applied";
+interface Evidence { docId: string; spanId: string; source: string; date: string; snippet: string; }
+// snippet + source are derived from chart.ts at build time — single source of truth.
+
+interface CheckpointOption { label: string; consequence: "approve" | "correct"; value: string; }
+
+interface Checkpoint {
+  // ...as today, except:
+  evidence: Evidence[];        // was single — cards render up to 3 excerpts
+  options: CheckpointOption[]; // consequence-labeled buttons
+  dependsOn?: string;          // Decision 2 → Decision 1, for the chain line
 }
-interface Policy { id: string; rule: string; appliesTo: string; fromDecision: string; }
 ```
 
-## Live agent implementation — core decisions (BUILT)
+`Decision.kind` becomes the 4-item clinical taxonomy. Everything else —
+`Resolution`, `Policy`, the `data-*` part names, `gate.ts`, `thread.ts`,
+`run.ts`'s player loop, the ledger reducer shape — is unchanged.
 
-> **Status: built.** The mock still choreographs the exact trust beats; a live
-> agent loop (`lib/agent.ts`) now runs alongside it, selected by `ANTHROPIC_API_KEY`.
-> It walks the same linear plan of beats but fills each decision with a real
-> `generateObject` call, so confidence-gating falls out of the model's own numbers
-> via the shared `lib/gate.ts`. The two architectural calls below were made up
-> front so the swap didn't re-litigate the foundation; both are realized as
-> described.
+## What we keep / drop from v1
 
-### Decision 1 — No LangGraph. Native AI SDK + a thin durable thread store.
+| Keep | Drop |
+|------|------|
+| Pause/resume via cursor + durable thread | 30-item corpus and 59-row ledger |
+| Shared confidence gate, mock + live parity | Two intermediate phase gates |
+| Policy promotion (scaled to 1→3, honest) | 6-kind decision taxonomy |
+| Trust dial with restart comparison | Metadata-string "evidence" |
+| Rehydrate-on-refresh (GET) | The #19 illegible-scan contrivance |
 
-The interrupt does **not** need coroutine-style suspension; it needs *durable state
-keyed by thread id*. That's a persistence decision, not a framework decision — and
-the built mock already proves the shape works with `return` + a saved cursor and no
-framework at all. So the live agent stays **AI-SDK-native**:
+## Build plan
 
-- Keep `createUIMessageStream` and the client-side `reduceParts` reducer **as-is**.
-- Replace the in-memory `SESSIONS` map with a **thread row** (Postgres/Redis) keyed
-  by `sessionId`: processed items, pending resolutions, adopted policies, dial. The
-  cursor becomes "next unprocessed item."
-- Make the ledger **server-authoritative** so a page refresh rehydrates from thread
-  state (fixes the one real bug the demo has — refresh currently loses the ledger,
-  because the server only remembers the cursor).
-- Swap the scripted player for a loop that calls the model **per item** with a
-  structured-output schema matching `Decision` (confidence + evidence + kind), and
-  keep `shouldBlock(level, dial)` **verbatim** — the gate logic is already right.
+1. **`lib/chart.ts`** — the seven documents, full text, highlight-span markers,
+   and the snippet-extraction helper. This is the demo's content and gets the
+   most care; write the documents like documents.
+2. **`lib/types.ts` + `lib/script.ts`** — model deltas above; new choreography
+   (~14 receipts, 3 checkpoints, dial variants, brief). Verify the player
+   (`run.ts`) needs no changes beyond the type updates.
+3. **`components/CheckpointCard.tsx` v2 + `components/DocumentPanel.tsx`** —
+   evidence-first card, consequence buttons, dependency line; the panel with
+   span highlighting wired from card, ledger, and brief citations.
+4. **Ledger / Sidebar / page pass** — copy, patient header, progress label,
+   brief rendering, disclaimer footer.
+5. **`lib/agent.ts` live-mode re-target** — same beat plan over the chart docs;
+   per-document `generateObject` with the clinical prompt; category-gated
+   blocking for the allergy beat (gate override, not confidence). LangSmith
+   wiring unchanged.
+6. **Docs** — README rewrite and `walkthroughs/03-working-in-the-open.md`
+   rewrite to the new script; update the repo-root README row if it names the
+   lease scenario.
 
-**Why not LangGraph.** It maps cleanly (its `interrupt()`/`Command(resume)` is 1:1
-with our `return`+cursor, and its checkpointer would solve durability), but: the
-workflow here is essentially **linear** (triage → deep-read → synthesis) with
-per-item pauses — no branching, cycles, or sub-agents, which is where LangGraph
-earns its keep. The whole app is built around the AI SDK's streaming; LangGraph JS
-has its own streaming model, so we'd pay an impedance cost bridging its events into
-the `UIMessage` stream. And LangGraph does **nothing** for the actual hard problem
-here — eliciting calibrated confidence + evidence per decision, which is
-prompt/structured-output work. For a **demo staying a demo**, it's added dependency
-and surface for no visible behavior change. Revisit only if the workflow grows real
-branching/sub-agents or needs multi-session replay.
+## Architecture (carried forward from v1, unchanged)
 
-`[DECISION] State/interrupt framework for live agent | Rec: AI-SDK-native + thin
-durable thread store; no LangGraph | Risk: low | Reversible? Y`
-
-### Decision 2 — LangSmith tracing via the LangSmith SDK (independent of Decision 1).
-
-Tracing is **orthogonal to LangGraph** — the LangSmith SDK traces any function, so
-dropping LangGraph costs us nothing here. Two composing layers form one trace tree:
-
-1. **Orchestration spans — `traceable`.** JS has no ergonomic decorators, so wrap
-   functions with the `traceable` higher-order helper (`langsmith/traceable`).
-   Nested `traceable` calls auto-nest as spans via `AsyncLocalStorage`. Wrap the
-   run loop and the per-item `decideOne`, and attach the gate outcome
-   (`shouldBlock` result, dial, confidence, impact) as span metadata — so the trace
-   shows *why* each item blocked or auto-resolved, which is the thing worth
-   inspecting in this app.
-2. **Model spans — AI SDK telemetry → LangSmith exporter.** We're on the Vercel AI
-   SDK, so use its telemetry hook rather than hand-wrapping the provider. Register
-   `AISDKExporter` (`langsmith/vercel`) once in `instrumentation.ts` via
-   `registerOTel`, and set `experimental_telemetry: { isEnabled: true }` on each
-   `generateObject`/`generateText` call. Model, tokens, latency, and prompt/
-   completion then appear as spans nested under the active `traceable` context.
-
-Setup is otherwise just env vars — `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`,
-`LANGSMITH_PROJECT` — no other wiring.
-
-**Caveats.** (a) Verify the exact export names against the pinned LangSmith JS
-version — `traceable` and `AISDKExporter` are the right primitives but the AI-SDK
-integration surface has churned across versions. (b) Serverless would need an
-explicit trace flush at the end of the route handler (LangSmith batches in the
-background and a frozen function drops them); irrelevant while this runs locally on
-a long-lived `next dev`. (c) Tracing only produces anything once there are real
-model calls, so wire it in as part of the same change that makes the agent live —
-there's nothing to trace in the choreographed run (`data-mode {mocked:true}`).
-
-`[DECISION] Observability for live agent | Rec: LangSmith SDK — `traceable` for
-orchestration + `AISDKExporter` for model spans | Risk: low | Reversible? Y`
-
-## Build plan / milestones
-
-1. **Corpus + script.** Author the 30-lease synthetic corpus with the planted
-   ambiguities (#7 landlord-wording class, #12 operative-doc, #19 illegible, #22
-   judgment) and the choreographed decision script for the mock.
-2. **Ledger + receipts, streaming.** `useChat` stream of `data-decision` parts →
-   `DecisionLedger`. Get the non-blocking narration feel right first.
-3. **Checkpoints.** Add the approval-tool path + `CheckpointCard` with
-   Approve/Correct. Verify pause/resume.
-4. **Policy promotion.** "Set policy" → retroactively rewrite the dependent ledger
-   entries live; `PolicyBanner`. This is the demo's centerpiece — build it
-   deliberately.
-5. **Phases + trust dial.** `PhaseTimeline` gates and the `TrustDial` threshold.
-6. **Live mode + docs.** ✅ Built. The real agent loop is wired per the two **core
-   decisions** above — AI-SDK-native with a durable, server-authoritative thread
-   store (no LangGraph), LangSmith tracing via `traceable` + `AISDKExporter`. See
-   `lib/agent.ts`, `lib/thread.ts`, `lib/gate.ts`, `instrumentation.ts`.
-
-## Open questions for you
-
-These change what I build, so I'd like your call before coding — see the questions
-alongside this plan. In short: **(1)** which scenario (A lease exit / B expense
-audit / C diligence); **(2)** the default posture (confidence-gated hybrid vs.
-something more or less aggressive); **(3)** v1 scope (mock-choreographed only, or
-mock + live agent).
+- **No LangGraph.** Interrupt = `return` + saved cursor in a durable thread
+  keyed by session; resolution = fresh POST that resumes. Linear workflow,
+  AI-SDK-native streaming, server-authoritative ledger with GET rehydrate.
+- **LangSmith tracing** via `traceable` (run loop + per-item decide, gate
+  outcome as span metadata) + `AISDKExporter` in `instrumentation.ts`. Env-var
+  gated, no-op when unset.
+- **Mock-first.** The choreographed no-key run is the primary artifact; live
+  mode (`ANTHROPIC_API_KEY`) walks the same beats with real model calls
+  through the same gate.

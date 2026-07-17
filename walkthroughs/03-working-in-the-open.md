@@ -1,83 +1,94 @@
-# Walkthrough 03 — Working in the Open
+# Walkthrough 03 — Working in the Open (clinical chart review)
 
 > Code: [`examples/03-agent-walkthrough`](../examples/03-agent-walkthrough) ·
 > Design rationale: [`PLAN.md`](../examples/03-agent-walkthrough/PLAN.md)
 
 Examples 01 and 02 made a *finished* answer trustworthy. This one makes the
-*process* trustworthy — because when an agent works for half an hour over a large
-corpus, the finished answer arrives too late and too dense to validate. The trust
-has to be built while the work happens.
+*process* trustworthy — because when an agent works over a corpus, the finished
+answer arrives too late and too dense to validate. The trust has to be built
+while the work happens, and each moment of it has the same anatomy: **a verbatim
+source excerpt, paired with a recommendation and its rationale, closed by the
+user's agree/disagree.**
 
 ## The problem in one line
 
-> An agent's analysis is hundreds of small, mostly-invisible decisions. Reveal
-> them all at the end and you've handed the user an unauditable wall; interrupt on
-> every one and you've rebuilt the manual process. The design goal is to make the
-> user's validation effort grow **sublinearly** with the corpus.
-
-Everything in this example is one of four levers toward that goal:
-**confidence-gating**, **phase gates**, **policy promotion**, and a **trust dial**.
+> An agent's analysis is dozens of small, mostly-invisible decisions. Reveal
+> them all at the end and you've handed the user an unauditable wall; interrupt
+> on every one and you've rebuilt the manual process. The design goal is to make
+> the user's validation effort grow **sublinearly** with the corpus.
 
 ## The shape of the run
 
-The agent works in three phases over 30 leases, deciding, per property: which
-document is operative, whether an exit exists, how to read the notice clause, the
-earliest exit date, and the cost. Most of those decisions are routine and stream by
-as **receipts**. A few are consequential or uncertain and become **checkpoints**
-that stop the run until the user weighs in.
+A physician has a post-discharge follow-up visit tomorrow. The agent reviews the
+patient's 7-document chart tonight — discharge summary, EHR med list, labs,
+cardiology consult, patient intake form, prior visit note, chest X-ray — and
+prepares a visit brief. Routine checks stream by as **receipts**; exactly three
+decisions become **checkpoints**, and they build on each other:
 
 ```
- Start ─► Phase 1 Triage ──[#12 blocker]──► [gate] ─► Phase 2 Deep read
-            receipts…                                   receipts…
-                                      [Meridian ×8 policy] [#19 blocker] [#22]
-                                             └─► [gate] ─► Phase 3 Synthesis ─► Done
+ Start ─► Reconcile medications ─[1 record conflict]─► Review results
+             receipts…                                    receipts…
+                            [2 clinical flag (builds on 1)] [3 safety blocker]
+                                          └─► [gate] ─► Visit brief ─► Done
 ```
 
-## Step 1 — The corpus is designed to force decisions
+1. **Record conflict.** The med list (3 months old) says lisinopril is active;
+   the discharge summary (12 days old) says it was held and never restarted.
+   Which record governs?
+2. **Clinical flag.** *Because* the discharge summary governs, she resumed
+   metformin at 1000 mg BID — and the new labs put her eGFR at 38 and falling.
+3. **Safety blocker.** Intake says "penicillin — rash"; the chart says NKDA;
+   she just completed a penicillin-class antibiotic. The agent won't touch an
+   allergy record alone.
 
-[`lib/corpus.ts`](../examples/03-agent-walkthrough/lib/corpus.ts) plants the
-ambiguities on purpose:
+## Step 1 — The corpus is real documents, and snippets can't lie
 
-- **A class of 8** (Meridian Estates leases) share the *identical* "six (6) months'
-  notice" wording — ambiguous between calendar and business months. This is the
-  policy-promotion set: one ruling should settle all 8.
-- **#12** has an original lease plus two amendments — which is operative?
-- **#19**'s break fee depends on a figure that's illegible in the scan.
-- **#22** has only a consent-gated "surrender for convenience" — a judgment call.
-- **#5 / #14 / #27** have no exit at all.
+[`lib/chart.ts`](../examples/03-agent-walkthrough/lib/chart.ts) holds seven
+short but *complete* synthetic documents, with the load-bearing spans marked
+inline (`⟦hl:lisinopril-held⟧…⟦/hl⟧`). The one hard rule: **every evidence
+snippet in the app is extracted verbatim from a document** via `evidenceFor()`,
+which throws if the span doesn't exist. There is no snippet that isn't backed by
+a document you can open.
 
-A designed corpus is what lets the demo show *specific* trust moments rather than
-generic "the agent decided things."
+That's what makes "clearly citing a source" literal:
+[`components/DocumentPanel.tsx`](../examples/03-agent-walkthrough/components/DocumentPanel.tsx)
+opens the *full* document for any citation — from a checkpoint card, a ledger
+receipt, or a brief line — scrolled to the highlighted span.
 
 ## Step 2 — Decisions are the unit, and confidence gates them
 
-[`lib/types.ts`](../examples/03-agent-walkthrough/lib/types.ts) makes a `Decision`
-the atom: `kind`, `subject`, `decided`, `rationale`, `evidence`, `confidence`,
-`impact`, `status`. Confidence and impact are not decoration — they're what decide
-whether a decision interrupts. That's the core move: **the agent's uncertainty,
-not a fixed rule, chooses what surfaces.**
+[`lib/types.ts`](../examples/03-agent-walkthrough/lib/types.ts) makes a
+`Decision` the atom: `kind`, `subject`, `decided`, `rationale`, `evidence`,
+`confidence`, `impact`, `status`. Confidence and impact decide whether a
+decision interrupts — **the agent's uncertainty, not a fixed rule, chooses what
+surfaces.** With one exception, and it's the interesting one: the allergy
+conflict is `kind: "safety"` and blocks at **every** dial setting. Some calls
+are gated by *category*, not confidence — autonomy is never for sale on a
+safety record.
 
-## Step 3 — The choreographed run
+## Step 3 — The checkpoint card is evidence-first
 
-v1 stages the run as data
-([`lib/script.ts`](../examples/03-agent-walkthrough/lib/script.ts)): a flat list of
-events — `phase`, `decision` (a receipt), `checkpoint` (with a `block` level), and
-`done`. The `block` level encodes the confidence gate declaratively:
+[`components/CheckpointCard.tsx`](../examples/03-agent-walkthrough/components/CheckpointCard.tsx)
+renders the trust transaction in a fixed order:
 
-- `always` — phase gates, and things a human *must* decide (the illegible #19).
-- `gated` — blocks unless the dial is at full autonomy (the #12 and Meridian and
-  #22 judgment calls).
-- `oversight` — blocks only at the most cautious setting (the blank-governing-law
-  assumption on #3).
+1. **The situation** — what the agent saw ("the two records disagree").
+2. **The excerpts** — up to three document quotes, each with source, date, and
+   an open-source link. For the record conflict you see both records side by
+   side; for the safety blocker, all three contradicting spans.
+3. **The recommendation** — the agent's lean and why, in its own block.
+4. **Consequence-labeled buttons** — never a bare "Approve":
+   *"Agree — treat the discharge summary as current"* vs
+   *"Disagree — keep the medication list as the record."*
 
-Scripting first is deliberate: the trust beats *are* the deliverable, so we make
-them deterministic before wiring a live agent. The event stream is identical to
-what a live run would emit.
+Each `CheckpointOption` carries everything choosing it does — the pending
+decision's new text, an optional promoted rule, per-dependent ledger patches —
+so the server applies an outcome by looking up the option, identically in both
+modes ([`lib/resolve.ts`](../examples/03-agent-walkthrough/lib/resolve.ts)).
 
 ## Step 4 — The player: stream until something should stop you
 
-[`lib/run.ts`](../examples/03-agent-walkthrough/lib/run.ts) plays the script into an
-AI SDK UI-message stream. Its whole job is the gate:
+[`lib/run.ts`](../examples/03-agent-walkthrough/lib/run.ts) plays the script
+into an AI SDK UI-message stream. Its whole job is the gate:
 
 ```ts
 if (shouldBlock(e.block, dial)) {
@@ -86,81 +97,109 @@ if (shouldBlock(e.block, dial)) {
   state.cursor = i + 1;         // remember where to resume
   return;
 }
-// otherwise: auto-resolve on the agent's own lean and keep going
-autoResolve(writer, e);
+// otherwise: the agent takes its own lean, amber in the ledger
+autoResolve(rec, e.checkpoint);
 ```
 
-`shouldBlock` is the entire trust-dial mechanism:
+`shouldBlock` ([`lib/gate.ts`](../examples/03-agent-walkthrough/lib/gate.ts))
+is the entire trust-dial mechanism:
 
 ```ts
-always    → true
+always    → true            // safety + the final gate
 gated     → dial !== "autonomy"
 oversight → dial === "oversight"
 ```
 
-So the *same script* produces six checkpoints at Balanced, more at Oversight, and
-only the hard blocker + gates at Autonomy — where the gated decisions stream past
-as `auto-resolved` receipts (flagged amber, still auditable). That's the dial
-turning validation cost up and down.
+The *same script* produces three checkpoints at Balanced, four at Oversight
+(the dizziness judgment call asks too), and only the safety blocker + gate at
+Autonomy — where decisions 1–2 stream past as `auto-resolved` receipts (amber,
+still auditable). That's the dial turning validation cost up and down.
 
 ## Step 5 — Pause and resume
 
 There's no long-lived connection. A checkpoint **ends the turn**; the server
-records `cursor` in an in-memory session. When the user acts, the client sends the
-resolution in the next request's `body`
-([`app/page.tsx`](../examples/03-agent-walkthrough/app/page.tsx)):
+saves a cursor in a durable thread
+([`lib/thread.ts`](../examples/03-agent-walkthrough/lib/thread.ts)) that also
+mirrors every streamed part — the ledger is server-authoritative, so a page
+refresh rehydrates via `GET /api/analyze` instead of losing the run. When the
+user acts, the resolution rides the next request's `body`:
 
 ```ts
 sendMessage({ text: "resolve" }, { body: { sessionId, dial, resolution } });
 ```
 
-The server applies the resolution, then continues from `cursor`. (In production
-this is exactly the seam where LangGraph's `interrupt()`/resume or the AI SDK
+The server applies it and continues from the cursor. (In production this is
+exactly the seam where LangGraph's `interrupt()`/resume or the AI SDK
 tool-approval flow lives — the model here already matches it.)
 
-## Step 6 — Policy promotion: the sublinear moment
+## Step 6 — One decision, three records: the sublinear moment
 
-This is the centerpiece. The Meridian checkpoint carries `dependents` — the 8
-decision ids sharing the wording. When the user picks an interpretation,
-`applyResolution` in [`lib/run.ts`](../examples/03-agent-walkthrough/lib/run.ts)
-emits **one policy part and eight decision-update parts**:
+The record-conflict checkpoint carries `dependents` — the metformin and
+antibiotic discrepancies streamed as `pending` rows *before* the card appeared,
+so you watched the open questions accumulate. Resolving it (either way!) emits
+one policy part and patches all three:
 
 ```ts
-write data-policy   { rule, count: 8, appliesTo: "Meridian" }
+write data-policy { rule: "…the discharge summary governs", count: 3 }
 for (id of dependents) write data-decisionUpdate { id, patch: { decided, status: "policy-applied" } }
 ```
 
-On the client, [`lib/ledger.ts`](../examples/03-agent-walkthrough/lib/ledger.ts)
-folds those updates over the existing rows — so all 8 ledger entries visibly rewrite
-themselves and the sidebar shows **"1 decision → 8 resolved."** One human action
-retired eight validations. Do that across a 300-lease portfolio and the user's
-effort barely moves — which is the whole thesis, made literal.
+The client reducer
+([`lib/ledger.ts`](../examples/03-agent-walkthrough/lib/ledger.ts)) folds the
+updates over the existing rows — they visibly rewrite, and the sidebar shows
+**"1 decision → 3 records resolved."** Scale the corpus and this is what keeps
+the user's effort flat.
 
-## Step 7 — The ledger, and what "trust" means
+## Step 7 — Decisions that build on each other
+
+The metformin card opens with a green chain line: *"Builds on your call: the
+discharge summary is the current med record."* Its body spells the chain out —
+you confirmed the record, the record says 1000 mg BID, the labs say eGFR 38,
+guidance says reassess. This is the difference between an agent that narrates
+findings and one that shows **which of your answers it's standing on** — an
+error you make at decision 1 is visible, not buried, at decision 2.
+
+The card also states the authority boundary: the agent puts dose reduction on
+the *agenda*; it does not touch the dose. Recommend, don't prescribe.
+
+## Step 8 — The ledger, and what "trust" means
 
 [`components/DecisionLedger.tsx`](../examples/03-agent-walkthrough/components/DecisionLedger.tsx)
-renders every decision — auto receipts quiet, anything that needed the user
-highlighted, evidence one click away. The **"Needed you"** filter is the point in
-miniature: trust doesn't mean *review everything*, it means *the things that needed
-you are findable, and the rest are sampleable*. The auto-decisions aren't hidden;
-they're just not in your face.
+renders every decision — receipts quiet, anything that needed the user
+highlighted, source one click away. The **"Needed you"** filter is the point in
+miniature: trust doesn't mean *review everything*, it means *the things that
+needed you are findable, and the rest are sampleable*. The run ends in a ranked
+**visit brief** whose every line links back to its decision and source span —
+including the one tension the agent deliberately *didn't* resolve (discharge
+held the ACE inhibitor; cardiology wants one continued) because that's the
+physician's call, and framing it as such is itself the trust behavior.
 
-## Step 8 — Phases and the gate
+## The live agent
 
-[`components/Sidebar.tsx`](../examples/03-agent-walkthrough/components/Sidebar.tsx)
-tracks the three phases; the gate checkpoints at each boundary are `always`-block.
-Gating the phase boundary is what stops a wrong triage call from silently poisoning
-27 deep reads — you confirm the shape of the work before the agent invests in it.
+With `ANTHROPIC_API_KEY` set, [`lib/agent.ts`](../examples/03-agent-walkthrough/lib/agent.ts)
+walks the same plan with a real `generateObject` call per decision, over the
+actual document text. The model self-scores confidence and impact;
+`levelFor` + `shouldBlock` (shared verbatim with the mock) decide what
+interrupts. The orchestration contributes structural priors: the safety call
+has a floor (`always`), routine checks a ceiling (at most Oversight asks), and
+checkpoint options stay hand-designed — what agreeing does to the ledger is
+product design, not model output. LangSmith tracing (env-var gated) records
+every gate outcome as span metadata.
 
 ## What to take to the other examples
 
-- **Surface decisions, not just answers**, and let **confidence gate** which ones
-  interrupt. This is the reusable core.
-- **Promote corrections to policies.** Whenever a fix generalizes to a class,
-  resolving the class in one action is what keeps validation sublinear.
-- **Gate the phases** so errors are caught before they compound.
-- **Give the user the dial.** The trust/productivity trade-off isn't yours to hard-
-  code — it's a control the user turns as their trust and the risk change.
-- **Pause/resume is just data.** A checkpoint that ends the turn plus a resolution
-  in the next request is enough to build human-in-the-loop on the AI SDK; swap in
-  LangGraph `interrupt()` when you need durable threads.
+- **Pair every recommendation with its verbatim source**, and make the citation
+  open the real document. A snippet that can't be clicked is an assertion; one
+  that can is evidence.
+- **Label buttons with consequences**, not verbs. "Approve" is a ritual;
+  "Agree — treat the discharge summary as current" is a decision.
+- **Promote corrections to rules.** Whenever a call generalizes, resolving the
+  class in one action is what keeps validation sublinear.
+- **Show the chain.** When decision N stands on decision N−1, say so on the
+  card — that's how errors surface early instead of compounding silently.
+- **Gate by category as well as confidence.** Some decisions (safety records)
+  should ignore the dial entirely; users trust the dial *more* once they see
+  it has limits.
+- **Pause/resume is just data.** A checkpoint that ends the turn plus a
+  resolution in the next request is enough for human-in-the-loop on the AI
+  SDK; swap in LangGraph `interrupt()` when you need durable threads.

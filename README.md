@@ -91,17 +91,22 @@ implicit decisions, and dumping them all at the end forces the user to validate
 everything cold. So 03 is **live, incremental decision surfacing** — the agent
 reveals its consequential calls *as it works* and gets them validated in flight.
 
-**What the user sees.** A live **decision ledger** filling in as the agent works a
-30-lease portfolio. Routine calls stream by as auditable receipts; uncertain or
-high-impact ones become **checkpoints** that stop the run for Approve / Correct /
-**Set-policy**. A **trust dial** sets how much it interrupts.
+**What the user sees.** An agent runs a **pre-visit clinical chart review** over a
+7-document patient chart, streaming routine checks into a live **decision ledger**
+as auditable receipts. Three consequential calls become **checkpoints** that stop
+the run — each one pairing **verbatim document excerpts** (click to open the full
+source, span highlighted) with a recommendation, its rationale, and
+consequence-labeled Agree / Disagree buttons. A **trust dial** sets how much it
+interrupts.
 
 **The core idea.** Make the user's validation effort grow **sublinearly** with the
-corpus, via four levers: **confidence-gating** (only uncertain/high-impact calls
-interrupt), **phase gates** (stop compounding at boundaries), **policy promotion**
-(one correction resolves a whole class — the demo's "1 decision → 8 leases"
-moment), and the **trust dial**. This pulls human-in-the-loop forward from 06 (06
-gates an external *action*; 03 validates analytical *decisions*).
+corpus: **confidence-gating** (only uncertain/high-impact calls interrupt),
+**category-gating** (a safety call blocks at every dial setting), **policy
+promotion** (one source-of-truth call reconciles three conflicting records — the
+demo's "1 decision → 3 records" moment), and decisions that **build on each
+other** (the dose flag explicitly cites the reconciliation call it depends on).
+This pulls human-in-the-loop forward from 06 (06 gates an external *action*; 03
+validates analytical *decisions*).
 
 **Stack.** Same `useChat` + custom-data-parts spine as 01, extended to a stateful,
 interruptible, pause/resume run. Production HITL swaps in LangGraph `interrupt()`

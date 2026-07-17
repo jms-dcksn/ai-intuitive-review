@@ -2,9 +2,10 @@ import type { UIMessageStreamWriter } from "ai";
 import type {
   Checkpoint,
   Decision,
-  LeaseUIMessage,
+  DoneData,
   Phase,
   Policy,
+  ReviewUIMessage,
   TrustDial,
 } from "./types";
 
@@ -29,7 +30,7 @@ export interface ThreadState {
   phases: Phase[];
   policies: Policy[];
   checkpoints: Checkpoint[];
-  done: { summary: string; stats: string } | null;
+  done: DoneData | null;
   // The checkpoint the run is currently waiting on (null when running or done).
   // Lets a rehydrating client tell which checkpoint is still open vs. resolved.
   pendingCheckpointId: string | null;
@@ -87,7 +88,7 @@ export function ledgerSnapshot(thread: ThreadState) {
   };
 }
 
-type Writer = UIMessageStreamWriter<LeaseUIMessage>;
+type Writer = UIMessageStreamWriter<ReviewUIMessage>;
 // The stream-chunk type the writer accepts (a data-part chunk, not a message part).
 type Chunk = Parameters<Writer["write"]>[0];
 
@@ -150,7 +151,7 @@ export class ThreadRecorder {
         t.pendingCheckpointId = (part.data as Checkpoint).id; // the run now waits here
         break;
       case "data-done":
-        t.done = part.data as { summary: string; stats: string };
+        t.done = part.data as DoneData;
         t.pendingCheckpointId = null;
         break;
       // data-mode is transient metadata, not ledger state.

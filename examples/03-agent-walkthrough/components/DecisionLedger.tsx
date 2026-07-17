@@ -1,16 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import type { Decision } from "@/lib/types";
+import type { Decision, Evidence } from "@/lib/types";
 import { ConfidenceBadge, KindTag, StatusChip } from "./atoms";
 
 /**
- * One decision. Auto/receipt rows are quiet; anything awaiting the user glows.
- * The evidence is one click away — the point is that "trust" means *able to
+ * One decision. Routine receipts are quiet; anything awaiting the user glows.
+ * The source is one click away — the point is that "trust" means *able to
  * check*, not *must check*.
  */
-function DecisionReceipt({ decision }: { decision: Decision }) {
-  const [open, setOpen] = useState(false);
+function DecisionReceipt({
+  decision,
+  onOpenSource,
+}: {
+  decision: Decision;
+  onOpenSource: (ev: Evidence) => void;
+}) {
   const d = decision;
   return (
     <div className={`receipt ${d.status}`}>
@@ -23,23 +28,24 @@ function DecisionReceipt({ decision }: { decision: Decision }) {
           <StatusChip status={d.status} />
         </div>
         <div className="decided">{d.decided}</div>
+        {d.rationale && <div className="rationale">{d.rationale}</div>}
         {d.evidence && (
-          <button className="peek" onClick={() => setOpen((v) => !v)}>
-            {open ? "Hide" : "Evidence"} · {d.evidence.source}
+          <button className="peek" onClick={() => onOpenSource(d.evidence!)} title={`“${d.evidence.snippet}”`}>
+            source: {d.evidence.source} ↗
           </button>
-        )}
-        {open && d.evidence && (
-          <div className="evidence">
-            <div className="evidence-snippet">{d.evidence.snippet}</div>
-            {d.rationale && <div className="rationale">{d.rationale}</div>}
-          </div>
         )}
       </div>
     </div>
   );
 }
 
-export function DecisionLedger({ decisions }: { decisions: Decision[] }) {
+export function DecisionLedger({
+  decisions,
+  onOpenSource,
+}: {
+  decisions: Decision[];
+  onOpenSource: (ev: Evidence) => void;
+}) {
   const [filter, setFilter] = useState<"all" | "surfaced">("all");
 
   // "surfaced" = the decisions that ever needed you, so you can audit just those.
@@ -69,7 +75,7 @@ export function DecisionLedger({ decisions }: { decisions: Decision[] }) {
         </div>
       </div>
       {shown.map((d) => (
-        <DecisionReceipt key={d.id} decision={d} />
+        <DecisionReceipt key={d.id} decision={d} onOpenSource={onOpenSource} />
       ))}
       {shown.length === 0 && <div className="empty">No decisions yet.</div>}
     </div>

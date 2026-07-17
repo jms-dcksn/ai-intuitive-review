@@ -13,24 +13,22 @@ export function ConfidenceBadge({ value }: { value: number }) {
 }
 
 const KIND_LABEL: Record<DecisionKind, string> = {
-  scope: "scope",
-  interpretation: "interpretation",
-  assumption: "assumption",
-  extraction: "extraction",
-  classification: "classification",
-  prioritization: "prioritization",
+  "record-conflict": "record conflict",
+  "clinical-flag": "clinical flag",
+  safety: "safety",
+  "routine-check": "routine check",
 };
 
 export function KindTag({ kind }: { kind: DecisionKind }) {
-  return <span className="kind">{KIND_LABEL[kind]}</span>;
+  return <span className={`kind kind-${kind}`}>{KIND_LABEL[kind]}</span>;
 }
 
 const STATUS_LABEL: Record<DecisionStatus, string> = {
   auto: "auto",
   pending: "awaiting you",
-  approved: "approved",
-  corrected: "corrected",
-  "policy-applied": "policy",
+  approved: "you agreed",
+  corrected: "you overruled",
+  "policy-applied": "by your rule",
   "auto-resolved": "auto-resolved",
 };
 

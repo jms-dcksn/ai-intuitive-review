@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { reduceParts } from "@/lib/ledger";
-import { TASK } from "@/lib/corpus";
-import type { LeaseUIMessage, Resolution, TrustDial } from "@/lib/types";
+import { TASK } from "@/lib/chart";
+import type { Evidence, ReviewUIMessage, Resolution, TrustDial } from "@/lib/types";
 import { DecisionLedger } from "@/components/DecisionLedger";
 import { CheckpointCard } from "@/components/CheckpointCard";
-import { PhaseTimeline, PolicyBanner, TrustDialControl } from "@/components/Sidebar";
+import { DocumentPanel } from "@/components/DocumentPanel";
+import { PatientCard, PhaseTimeline, PolicyBanner, TrustDialControl } from "@/components/Sidebar";
 
 const SESSION_KEY = "wito-session";
 
@@ -18,9 +19,10 @@ export default function Home() {
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const [started, setStarted] = useState(false);
   const [mocked, setMocked] = useState(false);
+  const [viewing, setViewing] = useState<Evidence | null>(null);
   const rehydrated = useRef(false);
 
-  const { messages, sendMessage, setMessages, status, error, clearError } = useChat<LeaseUIMessage>({
+  const { messages, sendMessage, setMessages, status, error, clearError } = useChat<ReviewUIMessage>({
     transport: new DefaultChatTransport({
       api: "/api/analyze",
       // We drive everything through a structured body, not a message list.
@@ -45,7 +47,7 @@ export default function Home() {
         const snap = await res.json();
         if (!snap.found || (!snap.decisions?.length && !snap.phases?.length)) return;
 
-        const parts: LeaseUIMessage["parts"] = [
+        const parts: ReviewUIMessage["parts"] = [
           ...(snap.phases ?? []).map((data: unknown) => ({ type: "data-phase" as const, data })),
           ...(snap.decisions ?? []).map((data: unknown) => ({ type: "data-decision" as const, data })),
           ...(snap.policies ?? []).map((data: unknown) => ({ type: "data-policy" as const, data })),
@@ -66,7 +68,7 @@ export default function Home() {
               .filter((id: string) => id !== openId),
           ),
         );
-        setMessages([{ id: "rehydrated", role: "assistant", parts } as LeaseUIMessage]);
+        setMessages([{ id: "rehydrated", role: "assistant", parts } as ReviewUIMessage]);
       } catch {
         // Best-effort — a failed rehydrate just leaves the user on a fresh start.
       }
@@ -88,6 +90,7 @@ export default function Home() {
     setSessionId(sid);
     setResolved(new Set());
     setStarted(true);
+    setViewing(null);
     setMessages([]); // drop any rehydrated run
     clearError();
     sendMessage({ text: "start" }, { body: { sessionId: sid, dial } });
@@ -102,13 +105,14 @@ export default function Home() {
   return (
     <main className="app">
       <div className="header">
-        <h1>Working in the Open</h1>
+        <h1>Working in the Open — clinical chart review</h1>
         <p>
-          The agent analyzes a 30-lease portfolio and <strong>surfaces its
-          consequential decisions as it goes</strong> — approving, correcting, or
-          setting a policy that resolves a whole class at once. You validate a
-          handful of calls live instead of auditing a 30-minute wall of
-          conclusions. The <strong>trust dial</strong> sets how much it stops you.
+          An agent reviews a patient chart ahead of tomorrow's visit and{" "}
+          <strong>surfaces its consequential decisions as it works</strong> —
+          each one pairing the verbatim source excerpts it rests on with a
+          recommendation and its rationale, so you can agree or overrule in
+          seconds. Routine checks stream by as auditable receipts. The{" "}
+          <strong>trust dial</strong> sets how much it stops you.
         </p>
       </div>
 
@@ -117,7 +121,7 @@ export default function Home() {
           <strong>Task:</strong> {TASK}
         </div>
         <button className="primary" onClick={start} disabled={streaming}>
-          {started ? (streaming ? "Working…" : "Restart") : "Start analysis"}
+          {started ? (streaming ? "Working…" : "Restart") : "Start chart review"}
         </button>
       </div>
 
@@ -133,25 +137,48 @@ export default function Home() {
           {error && (
             <div className="error-banner">
               The run failed: {error.message || "unknown error"}. Hit{" "}
-              {started ? "Restart" : "Start analysis"} to try again.
+              {started ? "Restart" : "Start chart review"} to try again.
             </div>
           )}
           {pending && (
-            <CheckpointCard checkpoint={pending} disabled={streaming} onResolve={resolve} />
+            <CheckpointCard
+              checkpoint={pending}
+              disabled={streaming}
+              onResolve={resolve}
+              onOpenSource={setViewing}
+            />
           )}
           {ledger.done && !pending && (
             <div className="done-card">
-              <div className="done-flag">Analysis complete</div>
+              <div className="done-flag">Visit brief</div>
               <div className="done-summary">{ledger.done.summary}</div>
+              {ledger.done.brief && (
+                <ol className="brief">
+                  {ledger.done.brief.map((item) => (
+                    <li key={item.rank} className="brief-item">
+                      <span className="brief-text">{item.text}</span>
+                      {item.evidence && (
+                        <button
+                          className="peek"
+                          onClick={() => setViewing(item.evidence!)}
+                          title={`“${item.evidence.snippet}”`}
+                        >
+                          source: {item.evidence.source} ↗
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
               <div className="done-stats">{ledger.done.stats}</div>
             </div>
           )}
           {started ? (
-            <DecisionLedger decisions={ledger.decisions} />
+            <DecisionLedger decisions={ledger.decisions} onOpenSource={setViewing} />
           ) : (
             <p className="hint">
-              Press <strong>Start analysis</strong>. Decisions stream into the
-              ledger; the agent stops you only when it should.
+              Press <strong>Start chart review</strong>. Checks stream into the
+              ledger; the agent stops you only when a call is genuinely yours.
             </p>
           )}
           {streaming && !pending && (
@@ -162,11 +189,19 @@ export default function Home() {
         </div>
 
         <aside className="side">
+          <PatientCard />
           <TrustDialControl value={dial} onChange={setDial} disabled={streaming} />
           <PhaseTimeline phases={ledger.phases} done={Boolean(ledger.done)} />
           <PolicyBanner policies={ledger.policies} />
         </aside>
       </div>
+
+      {viewing && <DocumentPanel target={viewing} onClose={() => setViewing(null)} />}
+
+      <footer className="disclaimer">
+        All chart content is synthetic and for demonstrating agent-trust UX only —
+        it is not medical advice, and no real patient data is involved.
+      </footer>
     </main>
   );
 }

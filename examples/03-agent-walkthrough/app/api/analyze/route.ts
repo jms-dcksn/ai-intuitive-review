@@ -7,7 +7,7 @@ import {
   ledgerSnapshot,
   ThreadRecorder,
 } from "@/lib/thread";
-import type { LeaseUIMessage, Resolution, TrustDial } from "@/lib/types";
+import type { ReviewUIMessage, Resolution, TrustDial } from "@/lib/types";
 
 export const runtime = "nodejs";
 // A live slice can run several model calls before the next checkpoint.
@@ -30,7 +30,7 @@ export async function POST(req: Request): Promise<Response> {
     process.env.MOCK_MODE === "true" || !process.env.ANTHROPIC_API_KEY;
   const { thread, created } = getOrCreateThread(sessionId, dial, mocked);
 
-  const stream = createUIMessageStream<LeaseUIMessage>({
+  const stream = createUIMessageStream<ReviewUIMessage>({
     execute: async ({ writer }) => {
       if (created) {
         thread.started = true;
