@@ -170,27 +170,38 @@ pipeline remains the variant for natively paginated sources (contracts, scans).
 
 ---
 
-### 06 · Approval / Human-in-the-loop
-**What the user sees.** When the agent wants to *act* (send an email, write to a
-DB, file a ticket), it pauses and renders an **approval card**: the proposed
-action, its arguments, a plain-language "what this will do", and Approve / Edit /
-Reject. Nothing fires without a click. This is the bridge from *review* to
-*authorize*.
+### 06 · Approval / Human-in-the-loop  ✅ *built — [`examples/06-approval-hitl`](./examples/06-approval-hitl)*
+**What the user sees.** A support agent resolves a **double-charge ticket**:
+read-only tools stream by as receipts, then the run **stops before every
+external action** with an **approval card** — the exact arguments the model
+chose (editable, with consequences that recompute live from your edits), a
+plain-language "what this will do" with a reversibility badge, and
+consequence-labeled Approve / Edit / Reject. Nothing fires without a click,
+and the audit trail ("0 actions fired without a click") is derived from the
+feed, not asserted. This is the bridge from *review* to *authorize*.
 
-**Sample input.** An agent with one "dangerous" tool (mock `send_email` /
-`create_ticket`) and a task that triggers it.
+**Sample input.** Three "dangerous" tools with different severities —
+`issue_refund` (money, irreversible), `send_email` (external, irreversible),
+`create_ticket` (internal, reversible) — and a billing complaint that
+naturally triggers them.
 
-**Approach.** Model the tool as **interrupt-and-resume**, not fire-and-forget:
-- **LangGraph:** `interrupt()` before the tool node → surface to UI → resume with
-  the human's decision.
-- **AI SDK 6:** tool-execution **approval** (`needsApproval`) with human-in-the-loop.
-- **AG-UI/CopilotKit:** tools that request human confirmation before firing.
+**Approach.** Interrupt-and-resume, not fire-and-forget — and the build's key
+call (vs. the original LangGraph sketch): the interrupt is the **AI SDK's own
+tool contract**. Write tools define an `inputSchema` but **no `execute`**, so
+the first write the model proposes ends `generateText` with an unresolved tool
+call; the human's resolution returns to the model as that call's **tool
+result** ("APPROVED … Receipt: RF-2209" / "REJECTED — adapt"). That makes the
+best beat — **reject-and-adapt**, where the agent reads your rejection note
+and re-plans to an escalation ticket — fall out with zero orchestration code.
+Args come from the model; the card's framing (labels, editability,
+consequences) is deterministic product design in `TOOL_META`, so the card
+can't be sweet-talked. See [`PLAN.md`](./examples/06-approval-hitl/PLAN.md).
 
-The UX rule: render the *arguments* the model chose, let the human edit them, and
-make reject/edit as easy as approve.
-
-**Stack.** LangGraph `interrupt` + assistant-ui / Agent Chat UI (both ship
-human-in-the-loop components), or CopilotKit generative-UI approval cards.
+**Stack.** Same `useChat` + custom-data-parts spine as 03 (durable thread,
+pause/resume, GET rehydrate), with a choreographed mock and a live
+tool-calling agent behind the same UI. LangGraph `interrupt()` / AI SDK
+`needsApproval` / AG-UI HITL remain the framework-native production swaps for
+the same seam.
 
 ---
 
