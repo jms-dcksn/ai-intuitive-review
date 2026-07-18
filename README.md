@@ -23,8 +23,8 @@ Each demo answers one of the questions a reviewer actually has:
 
 ## The demos
 
-| # | Demo | The trust question it answers |
-|---|------|-------------------------------|
+| Demo | The trust question it answers |
+|------|-------------------------------|
 | [01 · Grounded Citations](./examples/01-grounded-citations) | *"Where did this specific claim come from?"* |
 | [02 · Progressive Disclosure](./examples/02-progressive-disclosure) | *"Show me more — but only when I ask."* |
 | [03 · Working in the Open](./examples/03-agent-walkthrough) | *"Reveal your decisions as you go — don't make me validate 300 at the end."* |
